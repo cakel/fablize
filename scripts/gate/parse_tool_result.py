@@ -13,13 +13,27 @@ from typing import Any
 from ledger import classify_path_kind, redact
 
 
-VERIFY_RE = re.compile(
+# Tool names distinctive enough that seeing them anywhere in the command is
+# evidence on its own.
+VERIFY_TOOL_RE = re.compile(
     r"(?i)\b("
     r"pytest|unittest|go\s+test|cargo\s+test|npm\s+test|pnpm\s+test|yarn\s+test|bun\s+test|"
-    r"mvn\s+test|gradle\s+test|rspec|vitest|jest|playwright|cypress|"
+    r"mvn\s+(?:test|verify|package)|gradle\s+test|rspec|vitest|jest|playwright|cypress|"
     r"lint|eslint|ruff|flake8|mypy|pyright|tsc|typecheck|"
-    r"build|check|validate|verify|json\.tool|py_compile|curl"
+    r"npm\s+run\s+build|pnpm\s+build|yarn\s+build|cargo\s+build|go\s+build|gradle\s+build|"
+    r"json\.tool|py_compile"
     r")\b"
+)
+# Words that are ALSO ordinary English and common path segments, so they are
+# evidence only in command position. `cat build.log`, `grep -rn build src/` and
+# `ls build/` are reads, not verification runs — counting them satisfied the deep
+# Stop gate without any check having run.
+VERIFY_VERBS = {"build", "check", "validate", "verify", "curl", "make"}
+# Same rule for mutation: an unanchored match makes `grep -rn "rm -rf" docs/`
+# look like a file change and blocks a turn that only read files.
+MUTATING_CMDS = {"apply_patch", "chmod", "mkdir", "mv", "cp", "rm", "touch"}
+MUTATING_TOOL_RE = re.compile(
+    r"(?i)\b(python\s+.*\s+-m\s+compileall|npm\s+run\s+build|pnpm\s+build|yarn\s+build)\b"
 )
 # Tools whose output text may encode a failure status. Only tools that RUN
 # something qualify. Edit/Write/Read/Grep/Glob merely move content — a file that
@@ -41,10 +55,28 @@ FAILURE_RE = re.compile(
     r"traceback \(most recent call last\))"
 )
 SUCCESS_RE = re.compile(r"(?i)\b(passed|success|succeeded|0 failed|build completed|done|valid)\b")
-MUTATING_BASH_RE = re.compile(
-    r"(?i)\b(apply_patch|python\s+.*\s+-m\s+compileall|chmod|mkdir|mv|cp|rm|touch|"
-    r"npm\s+run\s+build|pnpm\s+build|yarn\s+build)\b"
-)
+
+_SEGMENT_RE = re.compile(r"[;&|\n]+")
+_ENV_ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
+
+def command_words(command: str) -> set[str]:
+    """The command word of each segment of a shell line.
+
+    `a && b | c` -> {a, b, c}. Leading env assignments and sudo are skipped, and
+    a path is reduced to its basename, so `/usr/bin/curl` counts as `curl`.
+    """
+    words: set[str] = set()
+    for segment in _SEGMENT_RE.split(command or ""):
+        for token in segment.split():
+            token = token.strip("'\"()")
+            if not token or _ENV_ASSIGN_RE.match(token):
+                continue
+            if token in {"sudo", "command", "exec", "time", "env"}:
+                continue
+            words.add(token.replace("\\", "/").rsplit("/", 1)[-1].lower())
+            break
+    return words
 
 
 def response_text(value: Any, limit: int = 4000) -> str:
@@ -146,7 +178,9 @@ def exit_success(input_data: dict[str, Any], text: str) -> bool | None:
 
 
 def is_verification_command(command: str) -> bool:
-    return bool(VERIFY_RE.search(command or ""))
+    if VERIFY_TOOL_RE.search(command or ""):
+        return True
+    return bool(command_words(command) & VERIFY_VERBS)
 
 
 def detect_failure(input_data: dict[str, Any]) -> dict[str, Any] | None:
@@ -177,7 +211,9 @@ def changed_kinds(input_data: dict[str, Any]) -> list[str]:
         return sorted({classify_path_kind(path.strip()) for path in paths})
     tool_name = str(input_data.get("tool_name") or "")
     command = command_from_input(input_data)
-    if tool_name == "Bash" and MUTATING_BASH_RE.search(command):
+    if tool_name == "Bash" and (
+        MUTATING_TOOL_RE.search(command) or (command_words(command) & MUTATING_CMDS)
+    ):
         return ["other"]
     return []
 

@@ -15,6 +15,14 @@ QUICK_RE = re.compile(
     r"(?i)\b(quick|brief|briefly|simple|simply|just explain|explain only|review only|direction|"
     r"check only|no edits|do not edit)\b|간단히|빠르게|설명만|검토만|방향|확인만"
 )
+# The subset of QUICK_RE that states the user wants nothing changed. These are
+# explicit scope, not intensity, so they outrank topic keywords on their own.
+# Kept separate because NORMAL_RE matches the bare word `review`, which would
+# otherwise swallow "review only".
+NO_EDIT_RE = re.compile(
+    r"(?i)\b(just explain|explain only|review only|check only|no edits|do not edit)\b|"
+    r"설명만|검토만|확인만"
+)
 DEEP_RE = re.compile(
     r"(?i)\b(deep|thorough|thoroughly|exhaustive|end-to-end|production-ready|deploy|deployment|"
     r"migration|database|auth|security|refactor|large|complex|implement the plan)\b|"
@@ -39,6 +47,14 @@ def classify_prompt(prompt: str) -> tuple[str, list[str]]:
     if re.search(r"(?i)\b(git\s+push|release|publish)\b|릴리즈|배포", text):
         risks.append("remote-write")
 
+    # Explicit scope beats topic keywords. "배포 절차만 간단히 설명해줘" mentions
+    # 배포, so DEEP_RE and the production/remote-write flags both fire and the
+    # deep block gets injected — demanding verification for a turn that changes
+    # nothing. Risks are still recorded and surfaced; only the mode changes.
+    # "no edits" is scope and stands alone; "briefly" is intensity and only
+    # counts when no action verb asks for work.
+    if NO_EDIT_RE.search(text) or (QUICK_RE.search(text) and not NORMAL_RE.search(text)):
+        return "quick", risks
     if DEEP_RE.search(text) or any(flag in risks for flag in ("production", "database", "remote-write")):
         return "deep", risks
     if QUICK_RE.search(text) and not risks:
