@@ -79,13 +79,37 @@ def command_from_input(input_data: dict[str, Any]) -> str:
     return ""
 
 
-def status_tail(text: str, chars: int = 400) -> str:
-    """Last slice of output, where a real status line lands.
+def status_text(input_data: dict[str, Any], chars: int = 400) -> str:
+    """True tail of the tool output, for status inference.
 
-    Scanning the whole body makes any command that merely PRINTS the word
-    'failed' — grep, cat, curl of a CI log — look like a failed call.
+    Must not be derived from response_text(): that truncates from the FRONT
+    (its cap stops the walk early, and redact keeps `value[:limit-3]`), so for a
+    long run it returns the START of the output — the opposite end from the
+    status line. Slicing that result yields a mid-run window, which reads a
+    failing `pytest` as green.
     """
-    return (text or "")[-chars:]
+    parts: list[str] = []
+    total = 0
+
+    def walk(item: Any) -> None:
+        nonlocal total
+        if total > 100_000:  # ponytail: pathological payload guard, not a real cap
+            return
+        if isinstance(item, str):
+            parts.append(item)
+            total += len(item)
+        elif isinstance(item, dict):
+            named = [k for k in ("stdout", "stderr", "output", "message", "text",
+                                 "content", "error", "summary") if k in item]
+            for key in named or list(item):
+                walk(item[key])
+        elif isinstance(item, list):
+            for child in item[:20]:
+                walk(child)
+
+    walk(input_data.get("tool_response", input_data))
+    joined = " ".join(parts)[-(chars * 4):]
+    return redact(joined, chars * 4)[-chars:]
 
 
 def exit_success(input_data: dict[str, Any], text: str) -> bool | None:
@@ -109,11 +133,11 @@ def exit_success(input_data: dict[str, Any], text: str) -> bool | None:
         return None
     if not is_verification_command(command_from_input(input_data)):
         return None
-    tail = status_tail(text)
+    tail = status_text(input_data)
     # Failure wins over a co-occurring success token: pytest's "1 failed, 990
     # passed" is a failed run. Known ceiling — `redact()` flattens newlines, so
     # this cannot tell "failure earlier, clean summary later" from a real
-    # failure. Preserving newlines through response_text is the upgrade path.
+    # failure. Preserving newlines through redact is the upgrade path.
     if FAILURE_RE.search(tail):
         return False
     if SUCCESS_RE.search(tail):

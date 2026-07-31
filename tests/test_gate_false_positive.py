@@ -21,6 +21,12 @@ def bash(stdout, command="echo hi", **extra):
             "tool_response": {"stdout": stdout, **extra}}
 
 
+# Long runs are where the status line is furthest from the front of the output.
+# response_text() truncates from the FRONT, so anything derived from it shows the
+# START of such a run. These fixtures are >4000 chars on purpose.
+_PASS_LINES = "\n".join(f"tests/test_mod.py::test_{i} PASSED" for i in range(140))
+
+
 CASES = [
     # (should_flag, label, payload)
     # response_text() reads tool_response, and Edit/Write echo the file body
@@ -67,6 +73,16 @@ CASES = [
     (True, "explicit success=False outranks text", {
         "tool_name": "Edit", "tool_input": {"file_path": "x.py"},
         "tool_response": {"success": False}}),
+
+    # Long-output status window. The Claude Code Bash tool_response carries no
+    # exit_code, so these verdicts rest entirely on the text path.
+    (True, "LONG run, failure only in the summary line",
+     bash(_PASS_LINES + "\n1 failed, 120 passed in 4.21s\n", command="pytest tests/")),
+    (True, "LONG run, FAILED line near the front too",
+     bash("FAILED tests/test_a.py::test_x\n" + _PASS_LINES + "\n1 failed, 120 passed\n",
+          command="pytest tests/")),
+    (False, "LONG run, genuinely green",
+     bash(_PASS_LINES + "\n140 passed in 4.21s\n", command="pytest tests/")),
 ]
 
 
