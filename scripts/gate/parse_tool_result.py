@@ -21,10 +21,24 @@ VERIFY_RE = re.compile(
     r"build|check|validate|verify|json\.tool|py_compile|curl"
     r")\b"
 )
+# Tools whose output text may encode a failure status. Only tools that RUN
+# something qualify. Edit/Write/Read/Grep/Glob merely move content — a file that
+# talks about errors, a commit message quoting a traceback, or a CI log being
+# read are all data, not failed tool calls.
+TEXT_INFERENCE_TOOLS = {"Bash", "PowerShell", "BashOutput"}
+
+# Status-shaped signals only, used when no explicit exit status is available.
+# Bare `failed` / `failure` / `error:` / `syntaxerror` were removed: they match
+# ordinary prose, changelog entries, and any command that prints or greps text
+# about errors — including this file. A detector that fires on reading itself
+# teaches the model to ignore it, which costs more than the misses.
 FAILURE_RE = re.compile(
-    r"(?i)(command not found|no such file or directory|traceback|syntaxerror|failed|failure|"
-    r"\berror:|\b[1-9][0-9]*\s+errors?\b|exit code [1-9]|exited with code [1-9]|"
-    r"tests? failed|build failed|lint failed)"
+    r"(?i)(command not found|no such file or directory|"
+    r"exit code [1-9]|exited with code [1-9]|exit status [1-9]|"
+    r"\b[1-9][0-9]*\s+(?:tests?\s+)?fail(?:ed|ures?)\b|"
+    r"\b[1-9][0-9]*\s+errors?\b|"
+    r"tests? failed|build failed|lint failed|"
+    r"traceback \(most recent call last\))"
 )
 SUCCESS_RE = re.compile(r"(?i)\b(passed|success|succeeded|0 failed|build completed|done|valid)\b")
 MUTATING_BASH_RE = re.compile(
@@ -65,6 +79,15 @@ def command_from_input(input_data: dict[str, Any]) -> str:
     return ""
 
 
+def status_tail(text: str, chars: int = 400) -> str:
+    """Last slice of output, where a real status line lands.
+
+    Scanning the whole body makes any command that merely PRINTS the word
+    'failed' — grep, cat, curl of a CI log — look like a failed call.
+    """
+    return (text or "")[-chars:]
+
+
 def exit_success(input_data: dict[str, Any], text: str) -> bool | None:
     candidates = [input_data, input_data.get("tool_response")]
     for candidate in candidates:
@@ -78,9 +101,22 @@ def exit_success(input_data: dict[str, Any], text: str) -> bool | None:
                     return value == 0
                 if isinstance(value, str) and value.isdigit():
                     return int(value) == 0
-    if FAILURE_RE.search(text):
+    # No explicit status. Infer from text only when the call was a tool that runs
+    # something AND the command was a verification. `grep`, `cat`, `git log` move
+    # text around; the words in that text say nothing about whether the call
+    # worked. Only a test/build/lint run encodes its own verdict in its output.
+    if str(input_data.get("tool_name") or "") not in TEXT_INFERENCE_TOOLS:
+        return None
+    if not is_verification_command(command_from_input(input_data)):
+        return None
+    tail = status_tail(text)
+    # Failure wins over a co-occurring success token: pytest's "1 failed, 990
+    # passed" is a failed run. Known ceiling — `redact()` flattens newlines, so
+    # this cannot tell "failure earlier, clean summary later" from a real
+    # failure. Preserving newlines through response_text is the upgrade path.
+    if FAILURE_RE.search(tail):
         return False
-    if SUCCESS_RE.search(text):
+    if SUCCESS_RE.search(tail):
         return True
     return None
 
@@ -91,8 +127,9 @@ def is_verification_command(command: str) -> bool:
 
 def detect_failure(input_data: dict[str, Any]) -> dict[str, Any] | None:
     text = response_text(input_data.get("tool_response", input_data))
-    success = exit_success(input_data, text)
-    if success is False or (success is None and FAILURE_RE.search(text)):
+    # exit_success already does the text pass (tool- and tail-gated). Re-running
+    # FAILURE_RE over the whole body here is what let content override "no status".
+    if exit_success(input_data, text) is False:
         return {"kind": "tool-result", "summary": redact(text or command_from_input(input_data), 240)}
     return None
 
