@@ -3,6 +3,36 @@
 All notable changes to fablize are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [SemVer](https://semver.org/).
 
+## [2.1.3] — 2026-08-03
+
+Fork release (`cakel/fablize`).
+
+### Fixed
+
+- **The injected CLAUDE.md block no longer bakes a version-pinned path**
+  (`setup/setup.sh`). It substituted `$CLAUDE_PLUGIN_ROOT`, which is
+  `.../cache/<marketplace>/<plugin>/<version>`, so after a plugin upgrade every
+  path in the block pointed at a directory that no longer exists — with nothing
+  to notice or repair it. Observed live: the block still pointed at `2.1.1`
+  after `2.1.2` was installed. Setup now copies `scripts/goals.py` and
+  `packs/*.txt` to `~/.fablize/lib/` and injects that stable path. The hooks
+  were never affected; they resolve `${CLAUDE_PLUGIN_ROOT}` at load time.
+- **The recorded setup version is read from the manifest** (`setup/setup.sh`),
+  not a string literal that silently disagreed with the installed plugin after
+  every release.
+
+### Added
+
+- **Upgrade staleness notice** (`hooks/gate_prompt.py`). `progress.json`'s
+  `version` was written and never read. `stale_setup_notice()` now compares it
+  against the running plugin's manifest and prepends one line when they differ,
+  pointing at `/fablize:setup` — the only thing that can refresh the copies and
+  the CLAUDE.md block. Silent when they match or anything is unreadable.
+- `tests/test_setup_paths.py` — 17 checks driving the real `setup.sh` against a
+  temp HOME and a fake versioned plugin root: no version in the injected block,
+  every referenced asset exists, assets refresh on re-run after an upgrade, the
+  block is not duplicated, and the notice fires only on a mismatch.
+
 ## [2.1.2] — 2026-08-03
 
 Fork release (`cakel/fablize`). Gate-accuracy fixes only; no behaviour added.
