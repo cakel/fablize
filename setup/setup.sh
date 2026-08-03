@@ -124,8 +124,20 @@ mkdir -p "$(dirname "$CLAUDE_MD")"; touch "$CLAUDE_MD"
 ts=$(python3 -c "import time;print(int(time.time()))")
 cp "$CLAUDE_MD" "$CLAUDE_MD.fablize-bak.$ts" && echo "  backup: $CLAUDE_MD.fablize-bak.$ts"
 
-# Substitute __PLUGIN_ROOT__ -> real path, then inject idempotently (remove old markers, re-insert).
-python3 - "$CLAUDE_MD" "$BLOCK_TPL" "$ROOT" <<'PY'
+# The block used to bake $ROOT — a VERSION-PINNED cache path like
+# .../cache/fablize/fablize/2.1.1 — straight into CLAUDE.md. After a plugin
+# upgrade that directory is gone and every path in the injected block dangles,
+# with nothing to notice or repair it. Copy the referenced assets to a stable
+# location instead and point the block there, so the paths survive upgrades.
+# The hooks keep using ${CLAUDE_PLUGIN_ROOT}; only this text needed pinning.
+LIB_DIR="$STATE_DIR/lib"
+mkdir -p "$LIB_DIR/scripts" "$LIB_DIR/packs"
+cp "$ROOT/scripts/goals.py" "$LIB_DIR/scripts/goals.py"
+cp "$ROOT"/packs/*.txt "$LIB_DIR/packs/"
+echo "  ✓ assets: $LIB_DIR (refreshed from $ROOT)"
+
+# Substitute __PLUGIN_ROOT__ -> stable path, then inject idempotently (remove old markers, re-insert).
+python3 - "$CLAUDE_MD" "$BLOCK_TPL" "$LIB_DIR" <<'PY'
 import sys, re, pathlib
 md, tpl, root = sys.argv[1], sys.argv[2], sys.argv[3]
 p = pathlib.Path(md)
@@ -138,10 +150,21 @@ PY
 
 # Record setup state so the skill won't auto-run setup again.
 mkdir -p "$STATE_DIR"
-python3 - "$scope" "$ts" <<'PY'
+python3 - "$scope" "$ts" "$ROOT" <<'PY'
 import json, sys, os
+# Read the version from the manifest instead of a literal: a hardcoded string
+# here silently disagrees with the installed plugin after every release, and the
+# staleness check in gate_prompt.py compares against exactly this value.
+root = sys.argv[3]
+try:
+    version = json.load(open(os.path.join(root, ".claude-plugin", "plugin.json"),
+                              encoding="utf-8"))["version"]
+except Exception:
+    version = "unknown"
 p = os.path.expanduser("~/.fablize/progress.json")
-json.dump({"setup_done": True, "scope": sys.argv[1], "version": "2.1.2", "ts": int(sys.argv[2])}, open(p, "w"))
+json.dump({"setup_done": True, "scope": sys.argv[1], "version": version, "ts": int(sys.argv[2])},
+          open(p, "w"))
+print(f"  ✓ state: version {version} recorded")
 PY
 
 echo "fablize setup complete ($scope) — applies from the next session."
