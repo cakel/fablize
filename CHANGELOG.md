@@ -3,6 +3,62 @@
 All notable changes to fablize are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [SemVer](https://semver.org/).
 
+## [2.1.2] — 2026-08-03
+
+Fork release (`cakel/fablize`). Gate-accuracy fixes only; no behaviour added.
+
+### Fixed
+
+Seven confirmed defects in the observation gate, all one shape: a substring, a
+path segment, or a mid-run slice was treated as evidence about the call itself.
+Both directions of failure were live — the gate waved through the "I changed
+code and it works" turn it exists to catch, and blocked turns that had verified
+or changed nothing.
+
+- **Failure detection keyed on content, not status** (`parse_tool_result.py`).
+  `detect_failure` matched `FAILURE_RE` against the whole output text when no
+  exit status was present, so an `Edit` quoting `SyntaxError:`, a `git log` of a
+  commit message, or a `grep` of the detector's own source were all recorded as
+  failed calls. Text inference is now limited to tools that run something, to
+  verification commands, and to status-shaped patterns.
+- **Status window was the front of the output, not the tail**
+  (`parse_tool_result.py`). `response_text()` truncates from the front, so a
+  4820-char `pytest` run ending in `1 failed, 120 passed` was recorded as
+  `success: true` — scenario S3 in `tests/test_gate.py`, the case the gate
+  exists to catch. `status_text()` now walks the raw response for the true tail.
+- **`docs/` path segment outranked the file extension** (`ledger.py`), so
+  `docs/conf.py` and `packages/docs/src/index.ts` classified as docs and
+  `docs_only()` exempted real code edits from the deep gate.
+- **`VERIFY_RE` matched bare `build`/`check`/`verify`/`curl` anywhere**
+  (`parse_tool_result.py`), so `cat build.log` counted as a verification run and
+  satisfied the deep gate with no check having run.
+- **Corrupt-ledger recovery reset `task_mode` to `quick`** (`ledger.py`),
+  disarming the gate for the rest of a deep turn after one unreadable read. It
+  now falls back to `normal` and records why.
+- **`MUTATING_BASH_RE` matched bare `rm`/`cp`/`mv` anywhere**
+  (`parse_tool_result.py`), so `grep -rn "rm -rf" docs/` counted as a file
+  change and blocked a read-only turn.
+- **Topic keywords overrode explicit scope** (`classify_task.py`), so
+  "배포 절차만 간단히 설명해줘" got the deep block. `NO_EDIT_RE` now stands alone;
+  risk flags are still recorded and surfaced.
+
+`command_words()` is the shared helper for the two command-position rules: it
+takes the command word of each `;`/`&&`/`|` segment, skips leading env
+assignments and `sudo`, and reduces a path to its basename.
+
+### Added
+
+- `tests/test_gate_false_positive.py` — 15 cases pinning observed false
+  positives, real failures, and the long-output truncation boundary.
+- `tests/test_gate_classification.py` — 35 checks across path kind, verification
+  detection, mutation detection, task mode, and a ledger corrupted on disk.
+
+### Known ceiling
+
+`ledger.redact()` flattens newlines, so the detector cannot distinguish "failure
+word early, clean summary later" from a real failure; failure wins. Pinned as a
+`CEILING:` case in the test.
+
 ## [2.1.1] — 2026-07-06
 
 동의 우선(consent-first). 셋업의 무고지 자동 star를 제거하고, 커뮤니티가 보고한 보안·라이선스 이슈를 정리했다.

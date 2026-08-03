@@ -141,7 +141,7 @@ mkdir -p "$STATE_DIR"
 python3 - "$scope" "$ts" <<'PY'
 import json, sys, os
 p = os.path.expanduser("~/.fablize/progress.json")
-json.dump({"setup_done": True, "scope": sys.argv[1], "version": "2.1.1", "ts": int(sys.argv[2])}, open(p, "w"))
+json.dump({"setup_done": True, "scope": sys.argv[1], "version": "2.1.2", "ts": int(sys.argv[2])}, open(p, "w"))
 PY
 
 echo "fablize setup complete ($scope) — applies from the next session."
