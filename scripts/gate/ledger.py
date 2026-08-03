@@ -91,8 +91,15 @@ def load_ledger(input_data: dict[str, Any]) -> dict[str, Any]:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         data = default_ledger()
+        # Fail toward keeping the gate armed. default_ledger()'s task_mode is
+        # "quick", which asks for no verification at all — so a single unreadable
+        # read (torn concurrent write, AV/OneDrive lock) would silently disarm the
+        # gate for the rest of a deep turn. The classified mode is unrecoverable
+        # here, so take the proportionate middle rather than the permissive end.
+        data["task_mode"] = "normal"
         data["failures"].append(
-            {"kind": "ledger", "summary": "Ledger could not be read; continuing fresh."}
+            {"kind": "ledger",
+             "summary": "Ledger could not be read; continuing fresh at task_mode=normal."}
         )
         return data
 
@@ -147,14 +154,20 @@ def classify_path_kind(path_value: str) -> str:
     name = path.name.lower()
     suffix = path.suffix.lower()
     parts = {part.lower() for part in path.parts}
-    if suffix in DOC_EXTS or name in {"readme", "readme.md", "agents.md"} or "docs" in parts:
-        return "docs"
+    # Extension first. A `docs/` segment is only a hint about the file's ROLE and
+    # must not outrank what the file actually IS: docs/conf.py and
+    # packages/docs/src/index.ts are code, and classifying them "docs" lets
+    # verify_state.docs_only() short-circuit the deep gate for real code changes.
     if suffix in CODE_EXTS:
         return "code"
+    if suffix in DOC_EXTS or name in {"readme", "readme.md", "agents.md"}:
+        return "docs"
     if suffix in CONFIG_EXTS or name.startswith(".env"):
         return "config"
     if suffix in ASSET_EXTS:
         return "assets"
+    if "docs" in parts:
+        return "docs"
     return "other"
 
 

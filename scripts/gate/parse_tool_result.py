@@ -13,24 +13,70 @@ from typing import Any
 from ledger import classify_path_kind, redact
 
 
-VERIFY_RE = re.compile(
+# Tool names distinctive enough that seeing them anywhere in the command is
+# evidence on its own.
+VERIFY_TOOL_RE = re.compile(
     r"(?i)\b("
     r"pytest|unittest|go\s+test|cargo\s+test|npm\s+test|pnpm\s+test|yarn\s+test|bun\s+test|"
-    r"mvn\s+test|gradle\s+test|rspec|vitest|jest|playwright|cypress|"
+    r"mvn\s+(?:test|verify|package)|gradle\s+test|rspec|vitest|jest|playwright|cypress|"
     r"lint|eslint|ruff|flake8|mypy|pyright|tsc|typecheck|"
-    r"build|check|validate|verify|json\.tool|py_compile|curl"
+    r"npm\s+run\s+build|pnpm\s+build|yarn\s+build|cargo\s+build|go\s+build|gradle\s+build|"
+    r"json\.tool|py_compile"
     r")\b"
 )
+# Words that are ALSO ordinary English and common path segments, so they are
+# evidence only in command position. `cat build.log`, `grep -rn build src/` and
+# `ls build/` are reads, not verification runs — counting them satisfied the deep
+# Stop gate without any check having run.
+VERIFY_VERBS = {"build", "check", "validate", "verify", "curl", "make"}
+# Same rule for mutation: an unanchored match makes `grep -rn "rm -rf" docs/`
+# look like a file change and blocks a turn that only read files.
+MUTATING_CMDS = {"apply_patch", "chmod", "mkdir", "mv", "cp", "rm", "touch"}
+MUTATING_TOOL_RE = re.compile(
+    r"(?i)\b(python\s+.*\s+-m\s+compileall|npm\s+run\s+build|pnpm\s+build|yarn\s+build)\b"
+)
+# Tools whose output text may encode a failure status. Only tools that RUN
+# something qualify. Edit/Write/Read/Grep/Glob merely move content — a file that
+# talks about errors, a commit message quoting a traceback, or a CI log being
+# read are all data, not failed tool calls.
+TEXT_INFERENCE_TOOLS = {"Bash", "PowerShell", "BashOutput"}
+
+# Status-shaped signals only, used when no explicit exit status is available.
+# Bare `failed` / `failure` / `error:` / `syntaxerror` were removed: they match
+# ordinary prose, changelog entries, and any command that prints or greps text
+# about errors — including this file. A detector that fires on reading itself
+# teaches the model to ignore it, which costs more than the misses.
 FAILURE_RE = re.compile(
-    r"(?i)(command not found|no such file or directory|traceback|syntaxerror|failed|failure|"
-    r"\berror:|\b[1-9][0-9]*\s+errors?\b|exit code [1-9]|exited with code [1-9]|"
-    r"tests? failed|build failed|lint failed)"
+    r"(?i)(command not found|no such file or directory|"
+    r"exit code [1-9]|exited with code [1-9]|exit status [1-9]|"
+    r"\b[1-9][0-9]*\s+(?:tests?\s+)?fail(?:ed|ures?)\b|"
+    r"\b[1-9][0-9]*\s+errors?\b|"
+    r"tests? failed|build failed|lint failed|"
+    r"traceback \(most recent call last\))"
 )
 SUCCESS_RE = re.compile(r"(?i)\b(passed|success|succeeded|0 failed|build completed|done|valid)\b")
-MUTATING_BASH_RE = re.compile(
-    r"(?i)\b(apply_patch|python\s+.*\s+-m\s+compileall|chmod|mkdir|mv|cp|rm|touch|"
-    r"npm\s+run\s+build|pnpm\s+build|yarn\s+build)\b"
-)
+
+_SEGMENT_RE = re.compile(r"[;&|\n]+")
+_ENV_ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
+
+def command_words(command: str) -> set[str]:
+    """The command word of each segment of a shell line.
+
+    `a && b | c` -> {a, b, c}. Leading env assignments and sudo are skipped, and
+    a path is reduced to its basename, so `/usr/bin/curl` counts as `curl`.
+    """
+    words: set[str] = set()
+    for segment in _SEGMENT_RE.split(command or ""):
+        for token in segment.split():
+            token = token.strip("'\"()")
+            if not token or _ENV_ASSIGN_RE.match(token):
+                continue
+            if token in {"sudo", "command", "exec", "time", "env"}:
+                continue
+            words.add(token.replace("\\", "/").rsplit("/", 1)[-1].lower())
+            break
+    return words
 
 
 def response_text(value: Any, limit: int = 4000) -> str:
@@ -65,6 +111,39 @@ def command_from_input(input_data: dict[str, Any]) -> str:
     return ""
 
 
+def status_text(input_data: dict[str, Any], chars: int = 400) -> str:
+    """True tail of the tool output, for status inference.
+
+    Must not be derived from response_text(): that truncates from the FRONT
+    (its cap stops the walk early, and redact keeps `value[:limit-3]`), so for a
+    long run it returns the START of the output — the opposite end from the
+    status line. Slicing that result yields a mid-run window, which reads a
+    failing `pytest` as green.
+    """
+    parts: list[str] = []
+    total = 0
+
+    def walk(item: Any) -> None:
+        nonlocal total
+        if total > 100_000:  # ponytail: pathological payload guard, not a real cap
+            return
+        if isinstance(item, str):
+            parts.append(item)
+            total += len(item)
+        elif isinstance(item, dict):
+            named = [k for k in ("stdout", "stderr", "output", "message", "text",
+                                 "content", "error", "summary") if k in item]
+            for key in named or list(item):
+                walk(item[key])
+        elif isinstance(item, list):
+            for child in item[:20]:
+                walk(child)
+
+    walk(input_data.get("tool_response", input_data))
+    joined = " ".join(parts)[-(chars * 4):]
+    return redact(joined, chars * 4)[-chars:]
+
+
 def exit_success(input_data: dict[str, Any], text: str) -> bool | None:
     candidates = [input_data, input_data.get("tool_response")]
     for candidate in candidates:
@@ -78,21 +157,37 @@ def exit_success(input_data: dict[str, Any], text: str) -> bool | None:
                     return value == 0
                 if isinstance(value, str) and value.isdigit():
                     return int(value) == 0
-    if FAILURE_RE.search(text):
+    # No explicit status. Infer from text only when the call was a tool that runs
+    # something AND the command was a verification. `grep`, `cat`, `git log` move
+    # text around; the words in that text say nothing about whether the call
+    # worked. Only a test/build/lint run encodes its own verdict in its output.
+    if str(input_data.get("tool_name") or "") not in TEXT_INFERENCE_TOOLS:
+        return None
+    if not is_verification_command(command_from_input(input_data)):
+        return None
+    tail = status_text(input_data)
+    # Failure wins over a co-occurring success token: pytest's "1 failed, 990
+    # passed" is a failed run. Known ceiling — `redact()` flattens newlines, so
+    # this cannot tell "failure earlier, clean summary later" from a real
+    # failure. Preserving newlines through redact is the upgrade path.
+    if FAILURE_RE.search(tail):
         return False
-    if SUCCESS_RE.search(text):
+    if SUCCESS_RE.search(tail):
         return True
     return None
 
 
 def is_verification_command(command: str) -> bool:
-    return bool(VERIFY_RE.search(command or ""))
+    if VERIFY_TOOL_RE.search(command or ""):
+        return True
+    return bool(command_words(command) & VERIFY_VERBS)
 
 
 def detect_failure(input_data: dict[str, Any]) -> dict[str, Any] | None:
     text = response_text(input_data.get("tool_response", input_data))
-    success = exit_success(input_data, text)
-    if success is False or (success is None and FAILURE_RE.search(text)):
+    # exit_success already does the text pass (tool- and tail-gated). Re-running
+    # FAILURE_RE over the whole body here is what let content override "no status".
+    if exit_success(input_data, text) is False:
         return {"kind": "tool-result", "summary": redact(text or command_from_input(input_data), 240)}
     return None
 
@@ -116,7 +211,9 @@ def changed_kinds(input_data: dict[str, Any]) -> list[str]:
         return sorted({classify_path_kind(path.strip()) for path in paths})
     tool_name = str(input_data.get("tool_name") or "")
     command = command_from_input(input_data)
-    if tool_name == "Bash" and MUTATING_BASH_RE.search(command):
+    if tool_name == "Bash" and (
+        MUTATING_TOOL_RE.search(command) or (command_words(command) & MUTATING_CMDS)
+    ):
         return ["other"]
     return []
 
