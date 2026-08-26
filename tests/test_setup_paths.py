@@ -120,6 +120,15 @@ with tempfile.TemporaryDirectory() as tmp:
     # — and the plugin cache keeps that version on disk, so it works. Observed
     # live: 2.1.5 applied at 16:44, silently rolled back to 2.1.3 at 16:51 by a
     # session that had been open since before the upgrade.
+    # What this does NOT cover: fake_plugin_root() copies the CURRENT setup.sh
+    # into every fake version, so the "old" root here has the guard in it. A real
+    # pre-2.1.7 root on disk does not, and nothing in the new version can run
+    # inside it — verified live on 2026-08-26, where a real 2.1.3 copy overwrote
+    # a 2.1.7 setup with exit 0. The guard only stops a downgrade between roots
+    # that both carry it. The defence that works against older copies is the
+    # staleness notice in gate_prompt.py, which always runs from the active
+    # plugin; it is checked further down.
+    #
     # Count backups before and after rather than asserting a total: the backup
     # name carries a whole-second timestamp, so two runs inside one second share
     # a filename and an absolute count is flaky.
@@ -165,6 +174,46 @@ with tempfile.TemporaryDirectory() as tmp:
         running = json.loads((REPO / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["version"]
         progress_path.write_text(json.dumps({"version": "0.0.1"}), encoding="utf-8")
         check("notice when versions differ", "0.0.1" in gate_prompt.stale_setup_notice(), True)
+
+        # The notice has to name the command, not `/fablize:setup`. That command
+        # carries a plugin path expanded when the SESSION loaded it, so in a
+        # session opened before the upgrade it runs the old setup.sh and records
+        # the old version again — which is how this fired twice on 2026-08-26.
+        progress_path.write_text(json.dumps({"version": "0.0.1", "scope": "global"}),
+                                 encoding="utf-8")
+        notice = gate_prompt.stale_setup_notice()
+        check("notice names the running plugin's setup.sh",
+              REPO.as_posix() + "/setup/setup.sh" in notice, True)
+        check("notice carries the recorded scope", "setup.sh global" in notice, True)
+        check("notice warns the slash command runs the old copy",
+              "OLD setup.sh" in notice, True)
+        progress_path.write_text(json.dumps({"version": "0.0.1", "scope": "local"}),
+                                 encoding="utf-8")
+        check("notice follows a local scope", "setup.sh local" in gate_prompt.stale_setup_notice(), True)
+        # A missing or nonsense scope must not produce a broken command.
+        progress_path.write_text(json.dumps({"version": "0.0.1"}), encoding="utf-8")
+        check("notice defaults the scope", "setup.sh global" in gate_prompt.stale_setup_notice(), True)
+        progress_path.write_text(json.dumps({"version": "0.0.1", "scope": "weird"}),
+                                 encoding="utf-8")
+        check("notice ignores a bad scope", "setup.sh global" in gate_prompt.stale_setup_notice(), True)
+
+        # The other direction is not a downgrade that happened — it means THIS
+        # session is the old one. hooks.json's ${CLAUDE_PLUGIN_ROOT} is resolved
+        # when the hooks are registered, so a session opened before an upgrade
+        # keeps running the old gate_prompt.py for its whole life. Reported live
+        # on 2026-08-26 by a second session showing `(2.1.7 -> 2.1.3)`, which the
+        # one-way wording called an upgrade. Running setup there is the thing to
+        # prevent, so the notice must say the opposite of the upgrade case.
+        progress_path.write_text(json.dumps({"version": "99.0.0", "scope": "global"}),
+                                 encoding="utf-8")
+        older = gate_prompt.stale_setup_notice()
+        check("older-plugin notice fires", bool(older), True)
+        check("older-plugin notice forbids running setup", "Do NOT run setup" in older, True)
+        check("older-plugin notice names both versions",
+              running in older and "99.0.0" in older, True)
+        check("older-plugin notice offers no command to run",
+              "setup.sh global" in older, False)
+
         progress_path.write_text(json.dumps({"version": running}), encoding="utf-8")
         check("silent when versions match", gate_prompt.stale_setup_notice(), "")
         progress_path.write_text("{not json", encoding="utf-8")
