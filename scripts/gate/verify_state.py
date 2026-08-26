@@ -19,7 +19,27 @@ MAX_STOP_BLOCKS = 2
 
 
 def has_successful_verification(ledger: dict[str, Any]) -> bool:
-    return any(result.get("success") is True for result in ledger.get("verification_results", []))
+    """A verification ran and nothing observed says it failed.
+
+    `success` is tri-state, and the third state is the common one. True is an
+    observed pass; False is an observed failure; None means the command ran, was
+    recognised as a verification, and its output carried no status-shaped signal
+    for `exit_success()` to read. Measured across 3,347 real ledgers: of 136
+    recorded verifications, 97 are None, 25 True, 14 False. **Seventy-one percent.**
+
+    Requiring `is True` therefore told the model it had skipped verification for
+    most checks that actually ran and passed — `check_doc: ERROR 0 / WARN 0` is
+    matched by neither FAILURE_RE nor SUCCESS_RE, and the hook payload usually
+    carries no exit code to short-circuit the text inference.
+
+    That is the same mistake as the false positives fixed in 2.1.5: asserting
+    something about evidence never seen. None is not proof of a pass, but it is
+    not grounds to claim nothing was verified either. An observed failure still
+    does not satisfy the gate — a turn whose only check returned False blocks,
+    and the failure is disclosed separately through the ledger's `failures`.
+    """
+    results = ledger.get("verification_results", [])
+    return any(result.get("success") is not False for result in results)
 
 
 def docs_only(ledger: dict[str, Any]) -> bool:
