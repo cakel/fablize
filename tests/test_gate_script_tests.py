@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
-"""A suite run as a plain script must count as verification.
+"""A suite or a checker run as a plain script must count as verification.
 
 `python tests/test_x.py`, exiting non-zero on failure, matches neither
 VERIFY_TOOL_RE (no pytest/unittest token) nor VERIFY_VERBS (the command word is
 `python`). Observed consequence: a deep turn that ran its tests six times still
 recorded zero verifications, so the Stop gate blocked it for "no observed
 verification" — twice in one session. fablize's own suite is that shape.
+
+A project's own checker is the same miss one step over. `python tools/check_doc.py
+--strict` reported ERROR 0 / WARN 0 and was still not counted, because `check` sat
+in an argument and VERIFY_VERBS only reads command position. That block was
+observed too, on a turn whose only change was one Markdown file.
 
 The NEGATIVE cases are the reason this is matched in command position rather than
 by searching the whole command: a filename appearing in a grep pattern, a `cat`,
@@ -33,6 +38,15 @@ POSITIVE = [
     "python src/idp_api_test.py",          # the x_test.py convention
     "env python tests/test_gate.py",
     "/usr/bin/python3 tests/test_gate.py",
+    # A project's own checker: runs a real check, exits non-zero when it fails.
+    "python tools/check_doc.py --strict",
+    "python tools/check_doc.py --strict 2>&1 | tail -1",
+    "python scripts/verify_gates.py --before a.txt --after b.md",
+    "python tools/lint_diagram.py",
+    "python tools/validate_manifest.py",
+    "python src/schema_check.py",
+    "python src/config-lint.py",           # the dash spelling of the same convention
+    "cd repo && python3 tools/check_doc.py",
 ]
 
 # A test filename that is being read, moved, matched or deleted — not run.
@@ -55,6 +69,18 @@ NEGATIVE = [
     "python testing_utils.py",
     "python latest_snapshot.py",
     "python protest.py",
+    # Same rule for the checker names. The `[_-]` is what separates a checker from
+    # a script whose name happens to begin with the verb.
+    "python checkout.py",
+    "python checker.py",
+    "python verifier.py",
+    "python linter.py",
+    "python validation.py",
+    "python pylint_config.py",             # neither `lint_x` nor `x_lint`
+    "cat tools/check_doc.py",
+    'grep -rn "python tools/check_doc.py" docs/',
+    "rm tools/check_doc.py",
+    "python manage.py check_perms.py",     # command runs manage.py
 ]
 
 

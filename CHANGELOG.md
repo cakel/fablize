@@ -3,6 +3,85 @@
 All notable changes to fablize are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **A mutating shell line is now classified by its operands, not by its verb alone.**
+  `changed_kinds` read only the command word, so every mutation reported `["other"]` —
+  a claim about files it never looked at. Moving one Markdown file with `cp` said a
+  non-docs thing had changed, which is exactly what `verify_state.docs_only()` reads to
+  decide whether a docs-only turn needs verification. Observed live: a turn that rewrote
+  one `.md` file and ran the repository's own checker to `ERROR 0 / WARN 0` was blocked
+  at Stop for "no observed verification", twice in a row.
+
+  `mutated_paths()` walks the same segments as `runs_script_test`, confirms the command
+  word is a mutating one, and collects the operands for `classify_path_kind`. Flags,
+  redirection debris left by `_SEGMENT_RE` splitting `2>&1`, and bare numbers are
+  skipped; when nothing can be named the result stays `["other"]`, as before.
+  `grep -rn "rm -rf" docs/` and `ls /tmp/cp-backup` remain negative — the command-position
+  rule is unchanged.
+
+- **`mkdir` no longer counts as a file change.** Creating an empty directory alters no
+  file and leaves nothing whose behaviour could be verified, but it set
+  `changed_files_seen` and pushed `"other"` into `change_kinds` — which **accumulates**
+  across a turn, so a single `mkdir -p` for a scratch directory disarmed `docs_only()`
+  for every edit that followed. One observed block came from nothing but a scratch
+  `mkdir` and a `curl -o` into it. `chmod`, `mv`, `cp`, `rm`, `touch` and `apply_patch`
+  are untouched.
+
+- **A project's own checker counts as verification.** `python tools/check_doc.py --strict`
+  was invisible to all three rules: no `pytest` token for `VERIFY_TOOL_RE`, command word
+  `python` rather than a verb for `VERIFY_VERBS`, and `_TEST_ENTRY_RE` accepts only
+  `test_x.py` / `x_test.py`. It runs a real check and exits non-zero on failure, which is
+  all the gate needs. `_CHECK_ENTRY_RE` adds `check`/`verify`/`validate`/`lint` entry
+  points in the same command position, and the `[_-]` is load-bearing exactly as it is
+  for tests: `checkout.py`, `checker.py`, `verifier.py`, `linter.py`, `validation.py` and
+  `pylint_config.py` all stay negative, as do `cat tools/check_doc.py`,
+  `grep -rn "python tools/check_doc.py" docs/` and `python manage.py check_perms.py`.
+
+- **Prose is no longer read as a command.** `command_from_input` fell back to
+  `tool_input["description"]` — a human sentence — whenever no command was present, and
+  every classifier then parsed it as a shell line. `description="check the build output"`
+  returned `is_verification_command` **True**, and `description="mkdir the output
+  directory"` returned `changed_kinds ["other"]`. The first is the dangerous direction:
+  a false change only makes the gate noisy, but a false verification makes it pass in
+  silence, which is the single failure it exists to prevent. The fallback dates to the
+  gate's first commit (`50463ff`) with no recorded rationale; it is removed rather than
+  narrowed, because a call that ran no command has no command to classify.
+
+- **`PostToolUse` now fires for the `PowerShell` tool** (`hooks/hooks.json`). The matcher
+  was `^(Bash|Edit|Write|NotebookEdit|MultiEdit)$`, so nothing done through PowerShell
+  ever reached the ledger — while `parse_tool_result.TEXT_INFERENCE_TOOLS` already listed
+  `PowerShell`, code the hook never delivered a payload to. On Windows, where it is the
+  default shell, a session that changed files with Bash and verified with PowerShell
+  recorded the change and none of the verification, which blocks with certainty; a
+  session that used PowerShell throughout left the gate inert. `MUTATING_CMDS` gains the
+  cmdlet spellings (`Copy-Item`, `Move-Item`, `Remove-Item`, `New-Item`, `Set-Content`,
+  `Add-Content`, `Out-File`); `cp`/`mv`/`rm` are PowerShell aliases and were already
+  covered. `BashOutput` is deliberately still excluded — it reads a call that already
+  happened, and counting it would record the same change twice.
+
+  Covered by a new `tests/test_gate_observed_blocks.py` (22 checks — both blocked turns
+  replayed end to end through the real ledger, plus two control turns proving the gate
+  still fires on unverified code and is not satisfied by a check that failed, plus the
+  matcher itself), `tests/test_gate_classification.py` (35 → 61 checks) and
+  `tests/test_gate_script_tests.py` (8 → 16 runs detected, 15 → 25 non-runs ignored).
+
+### Known ceiling
+
+- **A verification that succeeded but printed nothing status-shaped is recorded as
+  unknown, and unknown does not count.** When the hook payload carries an explicit exit
+  code this never arises. When it does not, `exit_success()` falls back to the output
+  tail, and plenty of real output matches neither `FAILURE_RE` nor `SUCCESS_RE` — a JSON
+  body, an HTTP page, a tool that prints only its result. `verification_record` then
+  stores `success: None`, and `has_successful_verification()` accepts only `is True`, so
+  a check that ran and passed leaves the deep gate armed. Measured: `curl … -o out.json`
+  returns `True` with `exit_code: 0` present and `None` without it, for both a 404 body
+  and a clean one. Widening `SUCCESS_RE` to close this would re-open the false-positive
+  class `test_gate_false_positive.py` exists to hold shut, so it stays open and pinned
+  as `CEILING:` checks instead.
+
 ## [2.1.4] — 2026-08-26
 
 Fork release (`cakel/fablize`), continuing the fork's own lane from 2.1.3. Upstream
