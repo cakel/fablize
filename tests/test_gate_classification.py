@@ -14,6 +14,11 @@ Five defects, all confirmed by driving the real modules:
      counted as a file change and blocked a turn that changed nothing.
   5. DEEP_RE ran before QUICK_RE, so a topic keyword overrode an explicit
      explain-only request.
+  6. changed_kinds never read the operands, so every mutating shell line reported
+     "other" — a claim about files it never looked at. `cp notes.md docs/notes.md`
+     said a non-docs thing changed, and `mkdir -p out` said a file changed at all.
+     change_kinds accumulates across a turn, so either one disarmed docs_only()
+     for the rest of it.
 
 Exit non-zero on any mismatch.
 """
@@ -27,7 +32,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts" / "gat
 
 import ledger as L  # noqa: E402
 from classify_task import classify_prompt  # noqa: E402
-from parse_tool_result import changed_kinds, is_verification_command  # noqa: E402
+from parse_tool_result import (  # noqa: E402
+    changed_kinds,
+    command_from_input,
+    is_verification_command,
+)
 
 
 def bash(command):
@@ -75,7 +84,7 @@ for command, want in [
 # 4. mutation — same command-position rule
 for command, want in [
     ("rm -rf dist", ["other"]),
-    ("mkdir -p out", ["other"]),
+    ("mkdir -p out", []),             # a directory is not a file: nothing to verify
     ("cp a b", ["other"]),
     ('grep -rn "rm -rf" docs/', []),
     ("ls /tmp/cp-backup", []),
@@ -83,6 +92,62 @@ for command, want in [
     ("cat notes.md", []),
 ]:
     check(f"mutating? {command!r}", changed_kinds(bash(command)), want)
+
+# 6. mutation kind comes from the operands, not from the verb alone
+for command, want in [
+    ("cp notes.md docs/notes.md", ["docs"]),
+    ("mv src/a.py src/b.py", ["code"]),
+    ("cp settings.json backup.json", ["config"]),
+    ("cp logo.png assets/logo.png", ["assets"]),
+    ("cp -a --preserve=all src dst", ["other"]),   # flags skipped, operands unnamed
+    ("cp a.md b.md 2>&1", ["docs"]),               # `2>&1` debris is not an operand
+    ("rm -rf dist && cp a.md b.md", ["docs", "other"]),
+    ("mkdir -p _ws && cp report.md _ws/report.md", ["docs"]),
+    ("touch", ["other"]),                          # mutates something it cannot name
+]:
+    check(f"operand kind {command!r}", changed_kinds(bash(command)), want)
+
+# 6b. a shell line reaches the ledger from PowerShell too — the PostToolUse matcher
+# excluded it, so on Windows every change and every check made there was invisible.
+for command, want in [
+    ("Copy-Item notes.md docs/notes.md", ["docs"]),
+    ("Remove-Item -Recurse dist", ["other"]),
+    ("Get-Content notes.md", []),
+]:
+    check(
+        f"pwsh mutating? {command!r}",
+        changed_kinds({"tool_name": "PowerShell", "tool_input": {"command": command}}),
+        want,
+    )
+
+# 6c. a project's own checker is a verification; a name that merely starts with the
+# verb is not. Same `[_-]` rule that keeps contest.py out of the test entry points.
+for command, want in [
+    ("python tools/check_doc.py --strict", True),
+    ("python scripts/verify_gates.py", True),
+    ("python tools/lint_diagram.py", True),
+    ("python src/schema_check.py", True),
+    ("python checkout.py", False),
+    ("python checker.py", False),
+    ("cat tools/check_doc.py", False),
+    ("python manage.py check_perms.py", False),    # command runs manage.py
+]:
+    check(f"checker? {command!r}", is_verification_command(command), want)
+
+# 6d. prose is not a command. The description fallback let a sentence disarm the
+# gate outright — a false verification, not merely a false change.
+for description, want_kinds, want_verify in [
+    ("check the build output", [], False),
+    ("mkdir the output directory", [], False),
+    ("remove stale caches", [], False),
+]:
+    payload = {"tool_name": "Bash", "tool_input": {"description": description}}
+    check(f"description kinds {description!r}", changed_kinds(payload), want_kinds)
+    check(
+        f"description verify {description!r}",
+        is_verification_command(command_from_input(payload)),
+        want_verify,
+    )
 
 # 5. explicit explain-only beats topic keywords
 for prompt, want in [

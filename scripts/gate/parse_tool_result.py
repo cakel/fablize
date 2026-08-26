@@ -41,10 +41,38 @@ VERIFY_VERBS = {"build", "check", "validate", "verify", "curl", "make"}
 # false-positive class this module exists to avoid.
 _PYTHON_CMD_RE = re.compile(r"(?i)^python[0-9.]*$")
 _TEST_ENTRY_RE = re.compile(r"(?i)(?:^|/)(?:test[_-][^/]+|[^/]+[_-]test)\.py$")
+# A project's own checker — `python tools/check_doc.py --strict`, `verify_gates.py`,
+# `lint_diagram.py` — is the same blind spot one step over. It runs a real check and
+# exits non-zero on failure, but `check`/`verify`/`lint` sit in an ARGUMENT, and
+# VERIFY_VERBS only counts them in command position. So a deep turn that ran its
+# document checker recorded zero verifications and the Stop gate blocked it.
+#
+# The `[_-]` is load-bearing, exactly as it is for test entry points: it keeps
+# `checkout.py`, `checker.py`, `verifier.py` and `linter.py` negative. Matching a
+# bare `check` prefix would count any script whose name merely starts that way.
+_CHECK_ENTRY_RE = re.compile(
+    r"(?i)(?:^|/)(?:(?:check|verify|validate|lint)[_-][^/]+"
+    r"|[^/]+[_-](?:check|verify|validate|lint))\.py$"
+)
 _CMD_PREFIXES = {"sudo", "command", "exec", "time", "env"}
 # Same rule for mutation: an unanchored match makes `grep -rn "rm -rf" docs/`
 # look like a file change and blocks a turn that only read files.
-MUTATING_CMDS = {"apply_patch", "chmod", "mkdir", "mv", "cp", "rm", "touch"}
+#
+# `mkdir` is deliberately absent. Creating an empty directory changes no file and
+# leaves nothing whose behaviour could be verified, but it set changed_files_seen
+# and pinned change_kinds to ["other"] — and change_kinds ACCUMULATES across a
+# turn, so one `mkdir -p` for a scratch directory disarmed docs_only() for every
+# later edit in that turn. Observed twice in one session, both times on a turn
+# that touched nothing but Markdown.
+MUTATING_CMDS = {
+    "apply_patch", "chmod", "mv", "cp", "rm", "touch",
+    # PowerShell's own verbs. cp/mv/rm are aliases there and already covered, but a
+    # script written in cmdlet form is invisible without these. `New-Item` is listed
+    # for the file case; the directory case is the `mkdir` argument above, and both
+    # go through the same operand classification.
+    "copy-item", "move-item", "remove-item", "new-item",
+    "set-content", "add-content", "out-file",
+}
 MUTATING_TOOL_RE = re.compile(
     r"(?i)\b(python\s+.*\s+-m\s+compileall|npm\s+run\s+build|pnpm\s+build|yarn\s+build)\b"
 )
@@ -53,6 +81,10 @@ MUTATING_TOOL_RE = re.compile(
 # talks about errors, a commit message quoting a traceback, or a CI log being
 # read are all data, not failed tool calls.
 TEXT_INFERENCE_TOOLS = {"Bash", "PowerShell", "BashOutput"}
+# Tools that RUN a shell line, so their command can be classified as a mutation.
+# BashOutput is excluded: it reads the output of a call that already happened, and
+# counting it would record the same change twice.
+SHELL_TOOLS = {"Bash", "PowerShell"}
 
 # Status-shaped signals only, used when no explicit exit status is available.
 # Bare `failed` / `failure` / `error:` / `syntaxerror` were removed: they match
@@ -116,9 +148,22 @@ def response_text(value: Any, limit: int = 4000) -> str:
 
 
 def command_from_input(input_data: dict[str, Any]) -> str:
+    """The command a call actually ran. Never the prose describing it.
+
+    This used to fall back to `tool_input["description"]`, a human sentence that
+    every classifier here then read as a shell line. The fallback dates to the
+    gate's first commit with no recorded rationale, and it cuts both ways:
+
+        description="check the build output"     -> is_verification_command True
+        description="mkdir the output directory" -> changed_kinds ["other"]
+
+    The first is the dangerous one. A false CHANGE only makes the gate noisy; a
+    false VERIFICATION makes it pass silently, which is the one failure this gate
+    exists to prevent. No command ran, so there is no command to classify.
+    """
     tool_input = input_data.get("tool_input")
     if isinstance(tool_input, dict):
-        return str(tool_input.get("command") or tool_input.get("description") or "")
+        return str(tool_input.get("command") or "")
     if isinstance(tool_input, str):
         return tool_input
     return ""
@@ -191,13 +236,18 @@ def exit_success(input_data: dict[str, Any], text: str) -> bool | None:
 
 
 def runs_script_test(command: str) -> bool:
-    """True when a segment invokes python on a test entry point as the script.
+    """True when a segment invokes python on a test or checker entry point.
 
     Evidence must be the command being run, never a filename that merely appears
     somewhere in it — so this walks each segment, only inspects arguments once the
     command word is confirmed to be python, and then looks at exactly one of them:
     the script python actually executes. `python manage.py test_import.py` runs
     manage.py, so it is not a test run, however its argument is named.
+
+    Two entry-point shapes count: a test suite (`test_x.py` / `x_test.py`) and a
+    project's own checker (`check_doc.py` / `verify_gates.py` / `schema_lint.py`).
+    Both run a real check and exit non-zero when it fails, which is all the gate
+    needs from a verification.
     """
     for segment in _SEGMENT_RE.split(command or ""):
         command_seen = False
@@ -218,7 +268,8 @@ def runs_script_test(command: str) -> bool:
             # -m, the inline source under -c, or the script path. Decide on it and
             # stop; `-m pytest` is VERIFY_TOOL_RE's job, and no module name matches
             # a *.py entry point anyway.
-            return bool(_TEST_ENTRY_RE.search(token.replace("\\", "/")))
+            script = token.replace("\\", "/")
+            return bool(_TEST_ENTRY_RE.search(script) or _CHECK_ENTRY_RE.search(script))
     return False
 
 
@@ -252,15 +303,56 @@ def changed_paths(input_data: dict[str, Any]) -> list[str]:
     return paths
 
 
+def mutated_paths(command: str) -> list[str]:
+    """The operands of each mutating segment — what the command actually touches.
+
+    Same command-position walk as `runs_script_test`: a segment counts only once
+    its command word is confirmed to be a mutating one, so `grep -rn "rm -rf" docs/`
+    contributes nothing. Flags are skipped, and so are redirections and bare
+    numbers, which `_SEGMENT_RE` leaves behind when it splits `2>&1`.
+
+    Returns operands, not kinds — the caller classifies. An empty list means the
+    command mutates something this cannot name, and the caller stays conservative.
+    """
+    operands: list[str] = []
+    for segment in _SEGMENT_RE.split(command or ""):
+        mutating = False
+        for raw in segment.split():
+            token = raw.strip("'\"()")
+            if not token:
+                continue
+            if not mutating:
+                if _ENV_ASSIGN_RE.match(token) or token in _CMD_PREFIXES:
+                    continue
+                word = token.replace("\\", "/").rsplit("/", 1)[-1].lower()
+                if word not in MUTATING_CMDS:
+                    break  # not a mutating invocation — nothing in this segment counts
+                mutating = True
+                continue
+            if token.startswith("-"):
+                continue  # a flag like -r, -f or --preserve=all
+            if "<" in token or ">" in token or token.isdigit():
+                continue  # redirection debris, not an operand
+            operands.append(token)
+    return operands
+
+
 def changed_kinds(input_data: dict[str, Any]) -> list[str]:
     paths = changed_paths(input_data)
     if paths:
         return sorted({classify_path_kind(path.strip()) for path in paths})
     tool_name = str(input_data.get("tool_name") or "")
     command = command_from_input(input_data)
-    if tool_name == "Bash" and (
+    if tool_name in SHELL_TOOLS and (
         MUTATING_TOOL_RE.search(command) or (command_words(command) & MUTATING_CMDS)
     ):
+        # Classify what the command names before falling back to "other". Reporting
+        # "other" for `cp notes.md docs/notes.md` is a claim about a file the gate
+        # never looked at: it says a non-docs thing changed when only Markdown moved,
+        # and docs_only() then keeps the deep gate armed for the rest of the turn.
+        operands = mutated_paths(command)
+        if operands:
+            return sorted({classify_path_kind(path) for path in operands})
         return ["other"]
     return []
 
