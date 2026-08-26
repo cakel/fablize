@@ -20,7 +20,9 @@ by then it had twice told the model it had skipped verification it had in fact
 run. A gate that cries wolf teaches the model to ignore it, which is the cost
 test_gate_false_positive.py exists to keep down.
 
-This replays both turns through the real ledger and asserts the verdict flips.
+This replays both turns through the real ledger and asserts the verdict flips,
+and carries control turns (C/D/F) proving the gate still fires on unverified
+code and is still not satisfied by a check that observably failed.
 It also pins the PostToolUse matcher, since a fix in parse_tool_result.py is
 inert for any tool the hook never receives. Exit non-zero on any mismatch.
 """
@@ -55,6 +57,22 @@ def bash(command, exit_code=0, stdout=""):
     }
 
 
+def silent(command, stdout=""):
+    """A payload with no exit code — the shape the real harness actually sends.
+
+    Measured across 3,347 ledgers: 97 of 136 recorded verifications have
+    success None, so this, not `bash()`, is the common case. Asserting against
+    `bash()` alone made these tests more generous than production.
+    """
+    return {
+        "session_id": "S",
+        "cwd": "/w",
+        "tool_name": "Bash",
+        "tool_input": {"command": command},
+        "tool_response": {"stdout": stdout},
+    }
+
+
 def replay(calls):
     """Drive a whole deep turn through the real ledger and return the verdict."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -80,13 +98,18 @@ TURN_A = [
     bash("mkdir -p _workspace/2026-08-26-001"),
     bash("cp tasks/v0_54/SPEC.md _workspace/2026-08-26-001/01_input.txt"),
     bash("cp _workspace/2026-08-26-001/body.md tasks/v0_54/SPEC.md"),
-    bash("python tools/check_doc.py --strict", stdout="check_doc: ERROR 0 / WARN 0 [strict]"),
+    silent("python tools/check_doc.py --strict", "check_doc: ERROR 0 / WARN 0 [strict]"),
 ]
 blocked_a, kinds_a, checks_a = replay(TURN_A)
 check("A blocked", blocked_a, False)
 check("A kinds", kinds_a, ["docs"])
 check("A verifications", len(checks_a), 1)
-check("A verification succeeded", checks_a[0]["success"] if checks_a else None, True)
+# Replayed live on 2026-08-26 after installing the fix: change_kinds came back
+# ['docs'] and the checker was recorded — but with success None, because
+# `ERROR 0 / WARN 0` matches neither FAILURE_RE nor SUCCESS_RE and the payload
+# carried no exit code. So this turn passes on the docs exemption, not on the
+# verification. Turn E is the one that exercises the verification path.
+check("A verification is unknown, not a pass", checks_a[0]["success"] if checks_a else "none", None)
 
 # --- Turn B: read an API into a scratch directory. Nothing in the repo changed. ---
 TURN_B = [
@@ -112,28 +135,42 @@ blocked_d, _, checks_d = replay(TURN_D)
 check("D failed check does not satisfy", blocked_d, True)
 check("D recorded the failure", checks_d[0]["success"] if checks_d else None, False)
 
-# --- Known ceiling: a run that succeeded but said nothing status-shaped is recorded
-# as unknown, and has_successful_verification() accepts only True. When the payload
-# carries an explicit exit code this never arises; when it does not, exit_success()
-# falls back to text, and output like a JSON body or an HTTP page matches neither
-# FAILURE_RE nor SUCCESS_RE. The check ran and passed, and the gate cannot tell.
+# --- Turn E: the case the docs exemption does NOT cover. Code changed, a checker
+# ran and passed, and its output said nothing FAILURE_RE or SUCCESS_RE recognises.
+# Requiring `success is True` blocked this — for 71% of all recorded verifications.
+TURN_E = [
+    bash("cp patch.py src/app.py"),
+    silent("python tools/check_doc.py --strict", "check_doc: ERROR 0 / WARN 0 [strict]"),
+]
+blocked_e, kinds_e, checks_e = replay(TURN_E)
+check("E blocked", blocked_e, False)
+check("E kinds", kinds_e, ["code"])
+check("E verification is unknown", checks_e[0]["success"] if checks_e else "none", None)
+
+# An observed failure still does not satisfy the gate, alone or beside an unknown.
+TURN_F = [bash("cp patch.py src/app.py"), bash("pytest tests/", 1, "3 failed, 40 passed")]
+check("F failed check alone still blocks", replay(TURN_F)[0], True)
+
+# --- Known ceiling, now narrower. `exit_success()` still cannot tell "ran and
+# passed" from "ran, and nothing in the output says either way" when the payload
+# carries no exit code — output like a JSON body or an HTTP page matches neither
+# FAILURE_RE nor SUCCESS_RE. What changed is which way the gate errs: unknown no
+# longer counts as unverified. The residual cost is that a fetch whose body is a
+# 404 page now satisfies the gate exactly as a clean one does, because at that
+# point the two are genuinely indistinguishable to it.
 CURL = "curl -s http://host/api/mr/72 -o out.json"
 BODY = "HTTP=404\n<html><title>404 Not Found</title>"
-
-
-def no_status(command, stdout):
-    return {"tool_name": "Bash", "tool_input": {"command": command},
-            "tool_response": {"stdout": stdout}}
-
 
 # With an exit code present the body is not misread — the 404 page does not poison it.
 check("explicit exit 0 wins over body text", verification_record(bash(CURL, stdout=BODY))["success"], True)
 check("explicit exit 1 is a failure", verification_record(bash(CURL, 1, BODY))["success"], False)
-# Without one, both a failed fetch and a clean one land on None, which does not count.
+# Without one, both a failed fetch and a clean one land on None.
 check("CEILING: no exit code, 404 body -> unknown",
-      verification_record(no_status(CURL, BODY))["success"], None)
+      verification_record(silent(CURL, BODY))["success"], None)
 check("CEILING: no exit code, good body -> unknown",
-      verification_record(no_status(CURL, '{"iid":72}'))["success"], None)
+      verification_record(silent(CURL, '{"iid":72}'))["success"], None)
+check("CEILING: a 404 fetch now satisfies the gate",
+      replay([bash("cp patch.py src/app.py"), silent(CURL, BODY)])[0], False)
 
 # --- A fix in parse_tool_result.py is inert for a tool the hook never receives. ---
 matcher = json.loads((REPO / "hooks" / "hooks.json").read_text(encoding="utf-8"))
@@ -156,7 +193,7 @@ def main():
     if bad:
         print(f"RESULT: {bad}/{len(CHECKS)} mismatched.")
         return 1
-    print(f"RESULT: all {len(CHECKS)} checks match. Both observed blocks are gone; C/D still fire.")
+    print(f"RESULT: all {len(CHECKS)} checks match. A/B/E pass; C/D/F still fire.")
     return 0
 
 

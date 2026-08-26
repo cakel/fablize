@@ -3,6 +3,55 @@
 All notable changes to fablize are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [SemVer](https://semver.org/).
 
+## [2.1.6] — 2026-08-26
+
+Fork release (`cakel/fablize`), continuing the fork's own lane from 2.1.5. Upstream
+(`fivetaku/fablize`) is at 2.1.1; everything from 2.1.2 on is fork-only.
+
+### Fixed
+
+- **A verification whose result is unknown no longer counts as no verification at all.**
+  `has_successful_verification()` required `success is True`, and `success` is tri-state:
+  True is an observed pass, False an observed failure, None a command that ran and
+  printed nothing `FAILURE_RE` or `SUCCESS_RE` recognises. 2.1.5 documented None as a
+  known ceiling on the assumption it was a corner case. It is not.
+
+  Measured across the 3,347 ledgers on this machine: of 136 recorded verifications,
+  **97 are None, 25 True, 14 False — 71% unknown.** The hook payload usually carries no
+  exit code, so `exit_success()` falls back to the output tail, and a great deal of real
+  output says neither. `check_doc: ERROR 0 / WARN 0 [strict]` is the case that started
+  this: `ERROR 0` is not the `[1-9]… errors` shape `FAILURE_RE` looks for, and nothing in
+  it matches `SUCCESS_RE` either. The check ran, passed, and was scored as if it had
+  never happened.
+
+  The rule is now "a verification ran and nothing observed says it failed": `any(success
+  is not False)`. An observed failure still does not satisfy the gate — a turn whose only
+  check returned False blocks exactly as before, and the failure is disclosed separately
+  through the ledger's `failures`. This is the same correction as 2.1.5's, one layer up:
+  the gate was asserting something about evidence it never saw.
+
+  Widening `SUCCESS_RE` instead would have re-opened the false-positive class
+  `test_gate_false_positive.py` exists to hold shut, so the tri-state is read where it is
+  interpreted rather than where it is produced. `exit_success()` is untouched.
+
+  Verified live rather than only in tests. Installing 2.1.5 and replaying the original
+  blocked turn produced `change_kinds ['docs']` and a recorded checker — with
+  `success: None`, which is how the size of this was discovered. That turn had passed on
+  the docs exemption, not on its verification; a turn that changes code and runs the same
+  checker was still blocked. Covered by `tests/test_gate_observed_blocks.py` (22 → 27
+  checks), which also gains a `silent()` payload helper: the previous tests supplied an
+  exit code the real harness does not send, which made them more generous than production.
+
+### Known ceiling
+
+- **A fetch whose body reports a failure now satisfies the gate.** With no exit code in
+  the payload, `curl … -o out.json` returning a 404 page and the same call returning
+  clean JSON are both recorded as None, and None now counts. Distinguishing them needs
+  the HTTP status apart from the process status, which the payload does not carry. This
+  is the deliberate cost of the change above: the gate errs toward believing a check that
+  ran, because 71% of the checks it was disbelieving had in fact passed. Pinned as a
+  `CEILING:` check.
+
 ## [2.1.5] — 2026-08-26
 
 Fork release (`cakel/fablize`), continuing the fork's own lane from 2.1.4. Upstream
