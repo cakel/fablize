@@ -3,6 +3,30 @@
 All notable changes to fablize are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [SemVer](https://semver.org/).
 
+## [2.1.4] — 2026-08-26
+
+Fork release (`cakel/fablize`), continuing the fork's own lane from 2.1.3. Upstream
+(`fivetaku/fablize`) is at 2.1.1; everything from 2.1.2 on is fork-only.
+
+### Fixed
+
+- **A suite run as a plain script now counts as verification.** `is_verification_command`
+  recognised `pytest`, `unittest`, `npm test` and friends, plus the verbs `build`/`check`/
+  `make` in command position — but not `python tests/test_x.py`, whose only command word is
+  `python`. Any stdlib-only project verifies that way, fablize's own suite included, so a
+  deep turn that ran its tests recorded zero verifications and the Stop gate blocked it for
+  "no observed verification". Observed in a real session: eight deep, file-changing turns
+  in a row logged `verifications=0` while the suite was in fact run six times, and the only
+  command the gate did record was the one investigating this bug — the "fires on reading
+  itself" failure mode `test_gate_false_positive.py` exists to prevent, in reverse.
+
+  Detected in command position only, and only on the script python actually executes: the
+  segment's command word must be `python`/`python3`, and its first non-flag argument must be
+  a `test_x.py` / `x_test.py` entry point. `cat test_x.py`, `grep "python test_x.py" docs/`,
+  `rm test_x.py` and `python manage.py test_import.py` all stay negative. Covered by
+  `tests/test_gate_script_tests.py` (8 runs detected, 15 non-runs ignored, plus the ledger
+  record end to end); mutation-checked five ways.
+
 ## [2.1.3] — 2026-08-03
 
 Fork release (`cakel/fablize`).

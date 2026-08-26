@@ -29,6 +29,19 @@ VERIFY_TOOL_RE = re.compile(
 # `ls build/` are reads, not verification runs — counting them satisfied the deep
 # Stop gate without any check having run.
 VERIFY_VERBS = {"build", "check", "validate", "verify", "curl", "make"}
+# A suite that runs as a plain script — `python tests/test_x.py`, exiting non-zero
+# on failure — is invisible to both of the above: no pytest/unittest token for
+# VERIFY_TOOL_RE, and the command word is `python`, not a verb. fablize's own suite
+# is exactly that shape, as is any stdlib-only project's, so a deep turn that ran
+# its tests still recorded zero verifications and got blocked at Stop.
+#
+# Matched in COMMAND POSITION only: the segment's command word must be python and
+# one of its arguments must look like a test entry point. `cat test_x.py`,
+# `grep "python test_x.py" docs/` and `rm test_x.py` therefore stay negative — the
+# false-positive class this module exists to avoid.
+_PYTHON_CMD_RE = re.compile(r"(?i)^python[0-9.]*$")
+_TEST_ENTRY_RE = re.compile(r"(?i)(?:^|/)(?:test[_-][^/]+|[^/]+[_-]test)\.py$")
+_CMD_PREFIXES = {"sudo", "command", "exec", "time", "env"}
 # Same rule for mutation: an unanchored match makes `grep -rn "rm -rf" docs/`
 # look like a file change and blocks a turn that only read files.
 MUTATING_CMDS = {"apply_patch", "chmod", "mkdir", "mv", "cp", "rm", "touch"}
@@ -177,8 +190,42 @@ def exit_success(input_data: dict[str, Any], text: str) -> bool | None:
     return None
 
 
+def runs_script_test(command: str) -> bool:
+    """True when a segment invokes python on a test entry point as the script.
+
+    Evidence must be the command being run, never a filename that merely appears
+    somewhere in it — so this walks each segment, only inspects arguments once the
+    command word is confirmed to be python, and then looks at exactly one of them:
+    the script python actually executes. `python manage.py test_import.py` runs
+    manage.py, so it is not a test run, however its argument is named.
+    """
+    for segment in _SEGMENT_RE.split(command or ""):
+        command_seen = False
+        for raw in segment.split():
+            token = raw.strip("'\"()")
+            if not token:
+                continue
+            if not command_seen:
+                if _ENV_ASSIGN_RE.match(token) or token in _CMD_PREFIXES:
+                    continue
+                command_seen = True
+                if not _PYTHON_CMD_RE.match(token.replace("\\", "/").rsplit("/", 1)[-1]):
+                    break  # not a python invocation — nothing in this segment counts
+                continue
+            if token.startswith("-"):
+                continue  # a flag like -B or -u
+            # The first non-flag argument is what python runs — the module name under
+            # -m, the inline source under -c, or the script path. Decide on it and
+            # stop; `-m pytest` is VERIFY_TOOL_RE's job, and no module name matches
+            # a *.py entry point anyway.
+            return bool(_TEST_ENTRY_RE.search(token.replace("\\", "/")))
+    return False
+
+
 def is_verification_command(command: str) -> bool:
     if VERIFY_TOOL_RE.search(command or ""):
+        return True
+    if runs_script_test(command):
         return True
     return bool(command_words(command) & VERIFY_VERBS)
 
