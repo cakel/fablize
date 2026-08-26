@@ -114,6 +114,46 @@ with tempfile.TemporaryDirectory() as tmp:
           bool(re.search(r"cache[/\\]fablize[/\\]fablize[/\\]\d", claude_md2)), False)
     check("block not duplicated", claude_md2.count("FABLIZE:BEGIN"), 1)
 
+    # An older copy of setup.sh must refuse to overwrite a newer setup. The
+    # /fablize:setup command has its plugin path expanded when a session loads
+    # it, so a session opened before an upgrade still runs the previous version
+    # — and the plugin cache keeps that version on disk, so it works. Observed
+    # live: 2.1.5 applied at 16:44, silently rolled back to 2.1.3 at 16:51 by a
+    # session that had been open since before the upgrade.
+    # Count backups before and after rather than asserting a total: the backup
+    # name carries a whole-second timestamp, so two runs inside one second share
+    # a filename and an absolute count is flaky.
+    backups_before = len(list((home / ".claude").glob("CLAUDE.md.fablize-bak.*")))
+    proc3 = run_setup(root, home)          # root is 9.9.9; 9.9.10 is recorded
+    check("downgrade refused", proc3.returncode, 1)
+    check("downgrade says both versions",
+          "9.9.9" in proc3.stdout and "9.9.10" in proc3.stdout, True)
+    check("downgrade names the escape hatch",
+          "FABLIZE_ALLOW_DOWNGRADE" in proc3.stdout, True)
+    # Nothing may be touched on the way out — the old assets stay unwritten.
+    check("assets untouched by refusal",
+          (lib / "scripts" / "goals.py").read_text(encoding="utf-8").strip(), "# goals 9.9.10")
+    check("record untouched by refusal",
+          json.loads((home / ".fablize" / "progress.json").read_text(encoding="utf-8"))["version"],
+          "9.9.10")
+    check("no extra CLAUDE.md backup from the refusal",
+          len(list((home / ".claude").glob("CLAUDE.md.fablize-bak.*"))), backups_before)
+
+    # Re-applying the SAME version is not a downgrade, and the escape hatch works.
+    check("same version still allowed", run_setup(root2, home).returncode, 0)
+    env_down = dict(os.environ, FABLIZE_ALLOW_DOWNGRADE="1")
+    proc5 = subprocess.run(
+        ["bash", str(root / "setup" / "setup.sh"), "global"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        env={**env_down, "HOME": str(home), "USERPROFILE": str(home),
+             "CLAUDE_PLUGIN_ROOT": str(root), "CLAUDE_CONFIG_DIR": str(home / ".claude")},
+        cwd=str(root), timeout=120,
+    )
+    check("explicit downgrade allowed", proc5.returncode, 0)
+    check("explicit downgrade records the old version",
+          json.loads((home / ".fablize" / "progress.json").read_text(encoding="utf-8"))["version"],
+          "9.9.9")
+
     # staleness notice: recorded version behind the running plugin
     import gate_prompt
 

@@ -118,6 +118,56 @@ case "$scope" in
   local)  CLAUDE_MD="$PWD/CLAUDE.md";;
   *) echo "fablize: scope must be global or local"; exit 1;;
 esac
+
+# --- refuse to apply an older copy over a newer one ------------------------------
+# /fablize:setup has ${CLAUDE_PLUGIN_ROOT} expanded when a SESSION LOADS it, so a
+# session opened before an upgrade still holds the previous version's path. That
+# copy is still on disk — the plugin cache keeps every installed version — so the
+# old setup.sh runs, succeeds, and silently rolls ~/.fablize/lib and progress.json
+# back. Nothing errors, and the only trace is the staleness notice reappearing.
+#
+# Observed live on 2026-08-26: 2.1.5 was applied at 16:44:39, and at 16:51:02 a
+# second session holding the 2.1.3 path overwrote the packs and recorded 2.1.3.
+# The user was told they were applying 2.1.5.
+#
+# 2.1.3 closed this class for the injected CLAUDE.md block. The command file is
+# outside this repo's control — the harness expands the path, not us — so the
+# defence has to live here, in the thing that actually runs.
+if [ "${FABLIZE_ALLOW_DOWNGRADE:-}" != "1" ]; then
+  python3 - "$ROOT" "$STATE_DIR" <<'PY' || exit 1
+import json, os, sys
+
+def parts(value):
+    out = []
+    for chunk in str(value).split("."):
+        digits = "".join(c for c in chunk if c.isdigit())
+        out.append(int(digits) if digits else 0)
+    return tuple((out + [0, 0, 0])[:3])
+
+root, state_dir = sys.argv[1], sys.argv[2]
+try:
+    running = json.load(open(os.path.join(root, ".claude-plugin", "plugin.json"),
+                             encoding="utf-8"))["version"]
+except Exception:
+    sys.exit(0)          # no manifest to compare — never block setup on that
+try:
+    recorded = json.load(open(os.path.join(state_dir, "progress.json"),
+                              encoding="utf-8")).get("version")
+except Exception:
+    sys.exit(0)          # first run
+if not recorded or recorded == "unknown" or parts(running) >= parts(recorded):
+    sys.exit(0)
+print("fablize: refusing to apply %s over %s." % (running, recorded))
+print("  This copy of setup.sh is older than the version already set up:")
+print("    %s" % root)
+print("  /fablize:setup has its plugin path expanded when a session loads it, so a")
+print("  session started before the upgrade still runs the previous version.")
+print("  Run it from a session started after the upgrade (or after /reload-plugins).")
+print("  To downgrade deliberately: FABLIZE_ALLOW_DOWNGRADE=1 setup.sh <local|global>")
+sys.exit(1)
+PY
+fi
+
 echo "fablize → $scope ($CLAUDE_MD)"
 
 mkdir -p "$(dirname "$CLAUDE_MD")"; touch "$CLAUDE_MD"
