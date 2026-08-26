@@ -3,6 +3,41 @@
 All notable changes to fablize are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [SemVer](https://semver.org/).
 
+## [2.1.7] — 2026-08-26
+
+Fork release (`cakel/fablize`), continuing the fork's own lane from 2.1.6. Upstream
+(`fivetaku/fablize`) is at 2.1.1; everything from 2.1.2 on is fork-only.
+
+### Fixed
+
+- **An older copy of `setup.sh` can no longer roll a newer setup back.** `/fablize:setup`
+  is written with `${CLAUDE_PLUGIN_ROOT}`, and the harness expands that **when a session
+  loads the command** — so a session opened before an upgrade still holds the previous
+  version's path. The plugin cache keeps every installed version on disk, so running it
+  succeeds: no error, no missing directory, just `~/.fablize/lib` and `progress.json`
+  quietly reverted. The only trace is the staleness notice reappearing, which points at
+  `/fablize:setup` — the very thing that caused it.
+
+  Observed live on 2026-08-26. `2.1.5` was applied at 16:44:39; at 16:51:02 a second
+  session holding the `2.1.3` path overwrote the packs and recorded `2.1.3`. It reported
+  success, and the user was told they were applying 2.1.5. Three versions were resident
+  in the cache at the time. The backup filenames setup.sh leaves behind
+  (`CLAUDE.md.fablize-bak.<ts>`) were what made the second run attributable at all.
+
+  Setup now compares the manifest version it is about to apply against the recorded one
+  and refuses to go backwards, naming both versions and the path it was invoked from.
+  The check runs **before** anything is written, so a refused run leaves the assets, the
+  record and the CLAUDE.md backups untouched. Re-applying the same version is not a
+  downgrade. `FABLIZE_ALLOW_DOWNGRADE=1` is the deliberate escape hatch, and a missing or
+  unreadable manifest or record never blocks setup — first runs must always work.
+
+  This is the same class 2.1.3 closed for the injected CLAUDE.md block: a version-pinned
+  path outliving the version. That fix could live in the block because the block is ours.
+  The command file is not — the harness expands the path, not this repo — so the defence
+  has to sit in the thing that actually runs. Covered by `tests/test_setup_paths.py`
+  (17 → 26 checks), driving the real `setup.sh` through upgrade, refused downgrade,
+  same-version re-apply, and the escape hatch.
+
 ## [2.1.6] — 2026-08-26
 
 Fork release (`cakel/fablize`), continuing the fork's own lane from 2.1.5. Upstream
