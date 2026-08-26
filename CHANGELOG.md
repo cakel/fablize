@@ -3,6 +3,41 @@
 All notable changes to fablize are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **The staleness notice now names the command to run, and knows which session is old.**
+  It said "Re-run `/fablize:setup`" — the very thing that had caused the staleness. That
+  command carries `${CLAUDE_PLUGIN_ROOT}` expanded when a **session loaded it**, so in a
+  session opened before the upgrade it runs the previous version's `setup.sh`, which is
+  still on disk, succeeds, and records the old version again. The notice now prints the
+  concrete `bash <running-root>/setup/setup.sh <scope>`, using the scope from the record,
+  and says why the slash command is not the same thing.
+
+  The comparison is also two-way now. `recorded` newer than `running` is not a downgrade
+  that happened — it means **this session is the old one**. `hooks.json`'s
+  `${CLAUDE_PLUGIN_ROOT}` is resolved when the hooks are registered, so a session opened
+  before an upgrade keeps running the old `gate_prompt.py` for its whole life. Reported
+  live on 2026-08-26 by a second session showing `(2.1.7 -> 2.1.3)`, which the one-way
+  wording called an upgrade. That direction now tells the user **not** to run setup there
+  and offers no command at all, because running one is exactly what must not happen.
+
+- **2.1.7's downgrade guard does less than its changelog claimed.** It said an older copy
+  of `setup.sh` "can no longer roll a newer setup back". A guard shipped in a new version
+  cannot run inside an old copy: every pre-2.1.7 root already in the plugin cache still
+  overwrites freely. Verified live — with 2.1.7 recorded, a real 2.1.3 copy ran to
+  completion, exit 0, and recorded 2.1.3. The guard only stops a downgrade between roots
+  that both carry it, which is a forward-looking property, not a fix for what was
+  observed. `tests/test_setup_paths.py` did not catch this because `fake_plugin_root()`
+  copies the current `setup.sh` into every fake version, so its "old" root had the guard.
+  The same over-generosity as 2.1.6's payloads. Both the test and the claim now say so.
+
+  Covered by `tests/test_setup_paths.py` (26 → 36 checks): the notice names the running
+  root, follows the recorded scope, defaults a missing or invalid one, warns about the
+  slash command, and produces the opposite message with no runnable command when this
+  session's plugin is the older one.
+
 ## [2.1.7] — 2026-08-26
 
 Fork release (`cakel/fablize`), continuing the fork's own lane from 2.1.6. Upstream
