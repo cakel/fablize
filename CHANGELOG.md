@@ -3,7 +3,10 @@
 All notable changes to fablize are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [2.1.8] — 2026-08-26
+
+Fork release (`cakel/fablize`), continuing the fork's own lane from 2.1.7. Upstream
+(`fivetaku/fablize`) is at 2.1.1; everything from 2.1.2 on is fork-only.
 
 ### Fixed
 
