@@ -3,7 +3,13 @@
 All notable changes to fablize are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [2.1.1+cakel.1] — 2026-10-21
+
+Version scheme change. This fork is upstream 2.1.1 (`fivetaku/fablize`) plus its own
+commits, so the fork now reads `<upstream version>+cakel.<n>` (SemVer build metadata)
+instead of continuing upstream's numbers. The 2.1.2–2.1.8 entries below are the fork's
+earlier releases under the old scheme and are kept as history; no tags were ever
+published for them.
 
 ### Fixed
 
