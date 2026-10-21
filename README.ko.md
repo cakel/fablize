@@ -42,10 +42,12 @@ fablize는 그중 **효과가 검증된 절차만** 적용한다. 모델의 천�
 
 효과가 미미하거나 미검증인 것(말투 모방·넓은 추론 전파·무성 복구 가드·리뷰 리콜 스캔)은 **탑재하지 않았다.** 통제 실험으로 효과가 확정될 때까지 개인 개발용으로만 둔다.
 
+> [`fivetaku/fablize`](https://github.com/fivetaku/fablize)(upstream 2.1.1)의 fork이며 자체 수정을 포함합니다. 버전은 `2.1.1+cakel.<n>` 형식입니다. [CHANGELOG](CHANGELOG.md) 참고.
+
 ## 설치
 
 ```
-/plugin marketplace add fivetaku/fablize
+/plugin marketplace add cakel/fablize
 /plugin install fablize
 ```
 

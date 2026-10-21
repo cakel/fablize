@@ -42,10 +42,12 @@ The non-transferable rows are the model's job (or a human's), not a harness's. W
 
 Negligible or unverified ideas (style mimicry, broad reasoning injection, a silent-recovery guard, a review-recall scan) are **not shipped.** They stay in personal development until a controlled experiment confirms their effect.
 
+> This is a fork of [`fivetaku/fablize`](https://github.com/fivetaku/fablize) (upstream 2.1.1) with its own fixes; versions read `2.1.1+cakel.<n>`. See the [CHANGELOG](CHANGELOG.md).
+
 ## Install
 
 ```
-/plugin marketplace add fivetaku/fablize
+/plugin marketplace add cakel/fablize
 /plugin install fablize
 ```
 
