@@ -55,6 +55,12 @@ _CHECK_ENTRY_RE = re.compile(
     r"|[^/]+[_-](?:check|verify|validate|lint))\.py$"
 )
 _CMD_PREFIXES = {"sudo", "command", "exec", "time", "env"}
+# `ssh host 'cd x && cp .env .env.bak && ...'` runs on ANOTHER machine, but
+# _SEGMENT_RE ignores quotes and splits inside the payload, so the remote `cp`
+# looked like a local file change. Every deploy turn then armed the deep Stop gate
+# with a change nothing local could verify. Drop the quoted payload before
+# looking for mutations; verification still sees the full command.
+_SSH_PAYLOAD_RE = re.compile(r"""\bssh\b[^;&|\n'"]*?(['"]).*?\1""", re.S)
 # Same rule for mutation: an unanchored match makes `grep -rn "rm -rf" docs/`
 # look like a file change and blocks a turn that only read files.
 #
@@ -342,7 +348,7 @@ def changed_kinds(input_data: dict[str, Any]) -> list[str]:
     if paths:
         return sorted({classify_path_kind(path.strip()) for path in paths})
     tool_name = str(input_data.get("tool_name") or "")
-    command = command_from_input(input_data)
+    command = _SSH_PAYLOAD_RE.sub("ssh", command_from_input(input_data))
     if tool_name in SHELL_TOOLS and (
         MUTATING_TOOL_RE.search(command) or (command_words(command) & MUTATING_CMDS)
     ):
