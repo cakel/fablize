@@ -64,7 +64,7 @@ def should_block_stop(ledger: dict[str, Any]) -> tuple[bool, str]:
     # has nothing to verify, so it is NOT blocked — the old "add observable proof"
     # nag was a false-positive on ~1/3 of deep firings (docs/MEASUREMENT_PROTOCOL.md).
     if mode == "deep" and changed and not verified:
-        return True, "fablize gate: run the narrowest verification command for the changed behavior before final response, or record why none applies."
+        return True, "fablize gate: run the narrowest verification command for the changed behavior before final response, or, if none applies, say so in the final response (no waiver is recorded; the gate lets you through after 2 reminders)."
     # deep-only: normal mode no longer hard-blocks; it keeps an advisory prompt nudge.
     return False, ""
 

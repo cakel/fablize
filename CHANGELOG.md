@@ -3,6 +3,21 @@
 All notable changes to fablize are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **A command run over ssh no longer counts as a local file change.** `_SEGMENT_RE` ignores
+  quotes, so `ssh host 'cd x && cp .env .env.bak && …'` was split inside the payload and the
+  remote `cp` set `changed_files_seen`. Every deploy turn (deep via 배포/deploy) then armed the
+  Stop gate on a change nothing local could verify — 4 of 4 blocked turns in one session had
+  this as their only change. `changed_kinds` now drops the quoted ssh payload; verification
+  detection still sees the full command. Known ceiling: ssh-wrapped checks are still not
+  recognised as verification.
+- **The Stop-gate message no longer promises a waiver that does not exist.** "…or record why
+  none applies" had no effect (the decision reads only mode, stop_blocks, changed, verified).
+  It now says to state it in the final response and that the gate relents after 2 reminders.
+
 ## [2.1.8] — 2026-08-26
 
 Fork release (`cakel/fablize`), continuing the fork's own lane from 2.1.7. Upstream
