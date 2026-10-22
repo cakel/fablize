@@ -3,6 +3,15 @@
 All notable changes to fablize are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [SemVer](https://semver.org/).
 
+## [2.1.1+cakel.3] — 2026-10-22
+
+### Fixed
+
+- **Hook `timeout` raised 10s -> 30s.** `router.sh` hit `UserPromptSubmit hook … timed out after 10s`
+  (output discarded, so no routing context that turn). Cause: intermittent cold-start spikes of
+  `python3` (~5s observed once, ~0.1s otherwise; cause not isolated) with two Python-launching
+  hooks on the same event. 30s leaves headroom; hooks still fail open.
+
 ## [2.1.1+cakel.2] — 2026-10-22
 
 ### Changed
