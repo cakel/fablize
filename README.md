@@ -48,7 +48,7 @@ Negligible or unverified ideas (style mimicry, broad reasoning injection, a sile
 
 ```
 /plugin marketplace add cakel/fablize
-/plugin install fablize
+/plugin install fablize@cakel
 ```
 
 The per-task router (a UserPromptSubmit hook) registers automatically.

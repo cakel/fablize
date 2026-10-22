@@ -1,9 +1,9 @@
 {
-  "name": "fablize",
+  "name": "cakel",
   "owner": { "name": "fivetaku", "email": "gptaku.ai@gmail.com" },
   "metadata": {
     "description": "fablize — a harness that makes Opus behave like Fable (completion, evidence, verification as procedure)",
-    "version": "2.1.1+cakel.1"
+    "version": "2.1.1+cakel.2"
   },
   "plugins": [
     {

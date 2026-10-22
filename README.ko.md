@@ -48,7 +48,7 @@ fablize는 그중 **효과가 검증된 절차만** 적용한다. 모델의 천�
 
 ```
 /plugin marketplace add cakel/fablize
-/plugin install fablize
+/plugin install fablize@cakel
 ```
 
 작업별 라우터(UserPromptSubmit 훅)는 자동 등록된다.
