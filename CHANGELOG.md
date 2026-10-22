@@ -3,6 +3,21 @@
 All notable changes to fablize are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [SemVer](https://semver.org/).
 
+## [2.1.1+cakel.2] — 2026-10-22
+
+### Changed
+
+- **Marketplace name is now `cakel`** (was `fablize`, identical to upstream). A marketplace
+  name is the unique key in a user's `known_marketplaces.json`, so the fork and
+  `fivetaku/fablize` could not be added side by side. The plugin ID is now `fablize@cakel`;
+  install with `/plugin install fablize@cakel`. Existing `fablize@fablize` installs must be
+  removed and reinstalled.
+
+### Fixed
+
+- **Star target is now `cakel/fablize`.** `setup.sh` `REPO`/`REPO_URL` and the README star badges
+  pointed at upstream, so `setup.sh star yes` starred `fivetaku/fablize`.
+
 ## [2.1.1+cakel.1] — 2026-10-21
 
 Version scheme change. This fork is upstream 2.1.1 (`fivetaku/fablize`) plus its own

@@ -15,8 +15,8 @@ set -euo pipefail
 
 ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 BLOCK_TPL="$ROOT/setup/fablize-block.md"
-REPO="fivetaku/fablize"
-REPO_URL="https://github.com/fivetaku/fablize"
+REPO="cakel/fablize"
+REPO_URL="https://github.com/cakel/fablize"
 CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 STATE_DIR="$HOME/.fablize"
 STAR_MARKER="$STATE_DIR/star.json"

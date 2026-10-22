@@ -2,7 +2,7 @@ English | [한국어](README.ko.md)
 
 # fablize — run Opus like Fable
 
-[![GitHub stars](https://img.shields.io/github/stars/fivetaku/fablize?style=flat&color=yellow)](https://github.com/fivetaku/fablize/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/cakel/fablize?style=flat&color=yellow)](https://github.com/cakel/fablize/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 A Claude Code plugin that makes Opus (or any Claude model) **see a task through to the end — with evidence and verification — as procedure, not as luck.**
@@ -48,7 +48,7 @@ Negligible or unverified ideas (style mimicry, broad reasoning injection, a sile
 
 ```
 /plugin marketplace add cakel/fablize
-/plugin install fablize
+/plugin install fablize@cakel
 ```
 
 The per-task router (a UserPromptSubmit hook) registers automatically.
