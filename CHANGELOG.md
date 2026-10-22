@@ -13,6 +13,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
   install with `/plugin install fablize@cakel`. Existing `fablize@fablize` installs must be
   removed and reinstalled.
 
+### Fixed
+
+- **Star target is now `cakel/fablize`.** `setup.sh` `REPO`/`REPO_URL` and the README star badges
+  pointed at upstream, so `setup.sh star yes` starred `fivetaku/fablize`.
+
 ## [2.1.1+cakel.1] — 2026-10-21
 
 Version scheme change. This fork is upstream 2.1.1 (`fivetaku/fablize`) plus its own
