@@ -2,7 +2,7 @@
 
 # fablize — Opus를 Fable처럼
 
-[![GitHub stars](https://img.shields.io/github/stars/fivetaku/fablize?style=flat&color=yellow)](https://github.com/fivetaku/fablize/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/cakel/fablize?style=flat&color=yellow)](https://github.com/cakel/fablize/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 Opus(또는 임의 Claude 모델)가 **작업을 끝까지 — 증거와 검증을 거쳐 — 운(運)이 아니라 절차로 완주하도록** 만드는 Claude Code 플러그인.
