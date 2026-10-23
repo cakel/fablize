@@ -272,10 +272,17 @@ def runs_script_test(command: str) -> bool:
                 continue  # a flag like -B or -u
             # The first non-flag argument is what python runs — the module name under
             # -m, the inline source under -c, or the script path. Decide on it and
-            # stop; `-m pytest` is VERIFY_TOOL_RE's job, and no module name matches
-            # a *.py entry point anyway.
+            # leave this segment; `-m pytest` is VERIFY_TOOL_RE's job, and no module
+            # name matches a *.py entry point anyway.
+            #
+            # Leave the SEGMENT, not the command. Returning here judged the whole
+            # line by its first python call, so `python tools/sync_part.py; python
+            # tools/run_ci_lint.py` was not a verification while the reverse order
+            # was. Observed: the Stop gate blocked a turn twice for that.
             script = token.replace("\\", "/")
-            return bool(_TEST_ENTRY_RE.search(script) or _CHECK_ENTRY_RE.search(script))
+            if _TEST_ENTRY_RE.search(script) or _CHECK_ENTRY_RE.search(script):
+                return True
+            break
     return False
 
 

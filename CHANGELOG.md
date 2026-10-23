@@ -3,6 +3,15 @@
 All notable changes to fablize are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [SemVer](https://semver.org/).
 
+## [2.1.1+cakel.4] — 2026-10-23
+
+### Fixed
+
+- **A checker run after another python call now counts as verification.** `runs_script_test()`
+  returned on the first python segment of a line, so `python tools/sync_part.py …; python
+  tools/run_ci_lint.py` recorded no verification while the reverse order did, and the Stop gate
+  blocked the turn twice. It now leaves only that segment and keeps scanning the rest.
+
 ## [2.1.1+cakel.3] — 2026-10-22
 
 ### Fixed
