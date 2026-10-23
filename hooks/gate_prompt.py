@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -18,13 +19,15 @@ from ledger import add_unique, emit_json, read_stdin_json, update_ledger
 from classify_task import classify_prompt, context_for_mode
 
 
-def _version_key(value: str) -> tuple[int, int, int]:
-    """Numeric compare for version strings; anything unparsable sorts as 0."""
-    out = []
-    for chunk in str(value).split("."):
-        digits = "".join(c for c in chunk if c.isdigit())
-        out.append(int(digits) if digits else 0)
-    return tuple((out + [0, 0, 0])[:3])  # type: ignore[return-value]
+def _version_key(value: str) -> tuple[int, ...]:
+    """Every number in the version, in order: `2.1.1+cakel.4` -> (2, 1, 1, 4).
+
+    This used to keep only the first three, so fork builds `2.1.1+cakel.3` and
+    `+cakel.4` compared equal. An old session then got the upgrade notice instead
+    of "do NOT run setup", and setup.sh's twin of this key let it roll the
+    recorded version back. Observed 2026-10-23. Keep in step with setup.sh.
+    """
+    return tuple(int(n) for n in re.findall(r"\d+", str(value)))
 
 
 def stale_setup_notice() -> str:

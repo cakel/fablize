@@ -163,8 +163,26 @@ with tempfile.TemporaryDirectory() as tmp:
           json.loads((home / ".fablize" / "progress.json").read_text(encoding="utf-8"))["version"],
           "9.9.9")
 
+    # A fork build number is part of the version. Keeping only three numbers
+    # made `+cakel.3` equal to `+cakel.4`, so the old copy overwrote the newer
+    # setup with exit 0. Observed 2026-10-23. Fresh home: the record above is 9.9.9.
+    home_b = tmp / "home_b"
+    home_b.mkdir()
+    check("fork build applies", run_setup(fake_plugin_root(tmp, "2.1.1+cakel.4"), home_b).returncode, 0)
+    check("older fork build refused",
+          run_setup(fake_plugin_root(tmp, "2.1.1+cakel.3"), home_b).returncode, 1)
+    check("older fork build leaves the record",
+          json.loads((home_b / ".fablize" / "progress.json").read_text(encoding="utf-8"))["version"],
+          "2.1.1+cakel.4")
+
     # staleness notice: recorded version behind the running plugin
     import gate_prompt
+
+    key = gate_prompt._version_key
+    check("key orders fork builds", key("2.1.1+cakel.3") < key("2.1.1+cakel.4"), True)
+    check("key puts a fork build after its base", key("2.1.1") < key("2.1.1+cakel.1"), True)
+    check("key puts the next release after a fork build", key("2.1.1+cakel.9") < key("2.1.2"), True)
+    check("key orders two-digit parts", key("9.9.9") < key("9.9.10"), True)
 
     progress_path = home / ".fablize" / "progress.json"
     real_expanduser = os.path.expanduser

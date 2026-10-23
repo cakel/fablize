@@ -3,6 +3,16 @@
 All notable changes to fablize are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [SemVer](https://semver.org/).
 
+## [2.1.1+cakel.6] — 2026-10-23
+
+### Fixed
+
+- **Version compare now counts the fork build number.** `setup.sh`'s downgrade guard and
+  `gate_prompt._version_key` kept only the first three numbers, so `2.1.1+cakel.3` and
+  `2.1.1+cakel.4` compared equal. An old `cakel.3` setup then overwrote a `cakel.4` setup with
+  exit 0, and an old session was told to run setup instead of "Do NOT run setup". Observed
+  2026-10-23. Both now compare every number in the version.
+
 ## [2.1.1+cakel.5] — 2026-10-23
 
 ### Changed
