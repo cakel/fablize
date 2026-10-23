@@ -47,6 +47,11 @@ POSITIVE = [
     "python src/schema_check.py",
     "python src/config-lint.py",           # the dash spelling of the same convention
     "cd repo && python3 tools/check_doc.py",
+    # The check is not the first python call on the line. Judging by the first one
+    # only made these negative while the reversed order was positive.
+    "python tools/sync_part.py a b; python tools/run_ci_lint.py",
+    "python tools/sync_part.py && python tests/test_x.py",
+    "python -c 'print(1)' && python tools/check_doc.py",
 ]
 
 # A test filename that is being read, moved, matched or deleted — not run.
