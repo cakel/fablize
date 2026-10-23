@@ -3,6 +3,13 @@
 All notable changes to fablize are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [SemVer](https://semver.org/).
 
+## [2.1.1+cakel.5] — 2026-10-23
+
+### Changed
+
+- **Plugin author is now `fivetaku+cakel <cakel@hanmail.net>`.** The marketplace `owner` stays
+  `fivetaku`.
+
 ## [2.1.1+cakel.4] — 2026-10-23
 
 ### Fixed
