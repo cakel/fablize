@@ -135,14 +135,12 @@ esac
 # defence has to live here, in the thing that actually runs.
 if [ "${FABLIZE_ALLOW_DOWNGRADE:-}" != "1" ]; then
   python3 - "$ROOT" "$STATE_DIR" <<'PY' || exit 1
-import json, os, sys
+import json, os, re, sys
 
 def parts(value):
-    out = []
-    for chunk in str(value).split("."):
-        digits = "".join(c for c in chunk if c.isdigit())
-        out.append(int(digits) if digits else 0)
-    return tuple((out + [0, 0, 0])[:3])
+    # Every number, not the first three: `2.1.1+cakel.3` and `+cakel.4` must not
+    # compare equal. Same key as gate_prompt._version_key.
+    return tuple(int(n) for n in re.findall(r"\d+", str(value)))
 
 root, state_dir = sys.argv[1], sys.argv[2]
 try:
