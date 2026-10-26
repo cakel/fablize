@@ -3,6 +3,7 @@
 # fablize — Opus를 Fable처럼
 
 [![GitHub stars](https://img.shields.io/github/stars/cakel/fablize?style=flat&color=yellow)](https://github.com/cakel/fablize/stargazers)
+[![tests](https://github.com/cakel/fablize/actions/workflows/tests.yml/badge.svg)](https://github.com/cakel/fablize/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 Claude에게 좋은 일 습관을 붙여 주는 Claude Code 플러그인입니다. 만든 건 직접 돌려 보고, "다 했다"고 하기 전에 확인하고, 버그는 짐작하지 말고 차근차근 원인을 찾게 합니다.
