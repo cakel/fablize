@@ -64,7 +64,7 @@ Claude Code에서:
 
 > [`fivetaku/fablize`](https://github.com/fivetaku/fablize)(upstream 2.1.1)의 fork이며 자체 수정을 포함합니다. 버전은 `2.1.1+cakel.<n>` 형식입니다.
 >
-> cakel.7–8 작업(리뷰, 수정, 테스트, 문서)은 Claude Code에서 **Sonnet 5.5**와 **Opus 5.5**로 진행했습니다 — [사용한 모델](docs/GUIDE.ko.md#이-fork-작업에-쓴-모델) 참고.
+> cakel.7–8 작업(리뷰, 수정, 테스트, 문서)은 Claude Code에서 **Sonnet 5.5**와 **Opus 5.5**로 진행했고, 마지막 코드 리뷰는 **Fable 5.1**로 했습니다 — [사용한 모델](docs/GUIDE.ko.md#이-fork-작업에-쓴-모델) 참고.
 
 ## 라이선스
 
