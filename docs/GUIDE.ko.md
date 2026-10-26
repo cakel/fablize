@@ -103,7 +103,7 @@ goals status                                     # 지금 어디까지? (재시�
 ## 설치 세부
 
 - **항상 켜기 규칙:** `setup/setup.sh local|global`이 `CLAUDE.md`에 짧은 규칙 블록을 넣고(백업 생성) 참조 파일을 `~/.fablize/lib`에 복사합니다. 플러그인을 업데이트하면 다시 실행하세요. 오래된 상태면 fablize가 세션당 한 번 알려 줍니다.
-- **조기 종료 훅:** 셋업이 `~/.fablize/lib/hooks/finish-the-work.sh`를 설정의 `Stop` 훅으로 등록하는 방법을 출력합니다. 기본은 꺼져 있습니다([D4](DECISIONS.md) 참고).
+- **조기 종료 훅:** 기본은 꺼져 있습니다. 쓰려면 `~/.fablize/lib/hooks/finish-the-work.sh`(셋업이 최신으로 유지)를 설정의 `Stop` 훅으로 등록하세요([D4](DECISIONS.md) 참고).
 - **Windows:** 훅은 Git Bash로 돌고, `hooks/py.sh`가 `python3`, `python`, `py`를 찾습니다. Python이 없으면 훅은 아무것도 하지 않습니다.
 - **제거:** `setup/uninstall.sh local|global`이 블록을 지웁니다. 훅은 `/plugin uninstall fablize@cakel` 전까지 남습니다.
 

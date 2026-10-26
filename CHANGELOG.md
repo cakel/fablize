@@ -3,6 +3,14 @@
 All notable changes to fablize are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **`setup.sh` no longer prints the finish-the-work registration hint.** The opt-in note read
+  as a to-do, so the model relayed it as one and users asked whether they had to register it.
+  How to opt in now lives only in `docs/GUIDE.md`. (docs/DECISIONS.md D4)
+
 ## [2.1.1+cakel.8] — 2026-10-26
 
 ### Changed

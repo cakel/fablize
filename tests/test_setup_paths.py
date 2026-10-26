@@ -103,9 +103,8 @@ with tempfile.TemporaryDirectory() as tmp:
     check("finish-the-work.sh copied beside py.sh", (lib / "hooks" / "finish-the-work.sh").exists(), True)
     check("block runs goals.py through py.sh, not python3",
           ("hooks/py.sh" in claude_md, "python3 " in claude_md), (True, False))
-    # bash prints its own path form (/c/Users/... on Git Bash), so match the tail.
-    check("finish-the-work hint names the stable copy",
-          ".fablize/lib/hooks/finish-the-work.sh" in proc.stdout and "cache" not in proc.stdout.split("finish-the-work.sh")[-2][-80:], True)
+    # The opt-in hook is documented in GUIDE; setup output must not read as a to-do.
+    check("setup output does not prompt for finish-the-work", "finish-the-work" in proc.stdout, False)
     check("copied goals.py is this version",
           (lib / "scripts" / "goals.py").read_text(encoding="utf-8").strip(), "# goals 9.9.9")
 
