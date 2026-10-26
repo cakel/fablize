@@ -123,6 +123,22 @@ check("forbid-verify: demands phrased with a negative are not bans",
       [forbids_verification(p_) for p_ in [
           "테스트를 통과하지 않고는 끝내지 마", "don't skip the tests", "never skip tests",
           "테스트 하지 않고 넘어가지 마", "don't finish without running the tests", "테스트 돌리지 않고 끝내지 마"]], [False] * 6)
+# Second review: qualified rules, complaints, bug reports and scope are not bans;
+# an unrelated negation elsewhere in the sentence does not cancel one.
+check("forbid-verify: qualified rules / complaints / scope are not bans",
+      [forbids_verification(p_) for p_ in [
+          "never run anything destructive without asking", "don't run any commands that modify git history",
+          "왜 아무 명령도 실행 안 했어?", "버튼 눌러도 아무것도 실행이 안 돼, 원인 찾아줘", "이 파일만 수정해줘",
+          "같은 명령을 다시 실행하지 마세요"]],
+      [False] * 6)
+check("forbid-verify: a distant negation does not cancel a ban",
+      [forbids_verification(p_) for p_ in [
+          "No worries, skip the tests", "테스트 돌리지 않고 수정만 하고, 커밋하지 마", "검증하지 말고 수정만 해",
+          "아무것도 실행하지 마"]], [True] * 4)
+from classify_task import context_for_mode  # noqa: E402
+check("context: a ban drops the contradicting run-a-check line",
+      [("verify changed behavior" in context_for_mode("deep", [], True),
+        "run one relevant verification" in context_for_mode("normal", [], True))], [(False, False)])
 from classify_task import _ASKS_CHECK_RE  # noqa: E402
 check("asks-check: only an imperative lifts the ban",
       ([bool(_ASKS_CHECK_RE.search(p_)) for p_ in ["확인했어, 계속", "keep running with it", "응 계속"]],

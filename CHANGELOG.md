@@ -16,7 +16,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
   gate blocked twice a model that was obeying the user — on a weaker model, pressure to run
   what the user forbade. (docs/DECISIONS.md D2)
   Imperatives only ("검증하지 않았다" is a report) and not build tools ("do NOT run build
-  tools" still allows read-only checks): 0 of 5,721 real prompts flagged.
+  tools" still allows read-only checks): 0 of 5,721 real prompts flagged (the first count of
+  0 was wrong — "같은 명령을 다시 실행하지 마세요" was flagged; a repeat ban is now excluded).
+  Not a ban either: a qualified rule ("never run anything destructive", "commands that
+  modify git"), a complaint or bug report ("왜 아무 명령도 실행 안 했어?", "아무것도 실행이
+  안 돼"), or scope ("이 파일만 수정해"). Under a ban the normal/deep "run a check" line is
+  dropped from the context so the two do not contradict (second PR #18 review).
   A demand phrased with a negative is not a ban ("don't skip the tests", "테스트를 통과하지
   않고는 끝내지 마", "don't finish without running the tests"), and only an imperative
   ("now run the tests", "테스트 돌려줘") lifts a ban — "확인했어, 계속" keeps it (PR #18 review).

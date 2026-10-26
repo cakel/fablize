@@ -59,19 +59,29 @@ NORMAL_RE = re.compile(
 # Imperative only: "검증하지 않았다" is a report, not an instruction. Build tools are
 # left out — "do NOT run build tools (merge.py …)" still allows read-only checks.
 _KO_STOP = r"마(?![가-힣])|마세요|말고|말\s*것|말아"
+_KO_BAN = r"(?:지\s*(?:" + _KO_STOP + r")|면\s*안)"
 FORBID_VERIFY_RE = re.compile(
+    # A qualified rule ("never run anything destructive", "commands that modify
+    # git") still allows tests; only the bare ban counts.
     r"(?i)\b(?:don'?t|do not|never|without)\s+(?:run(?:ning)?|execut\w*)\s+(?:the\s+|any\s+)?"
-    r"(?:tests?|commands?|anything|checks?)\b|\bskip\s+(?:the\s+|running\s+)?tests?\b|"
-    r"\bedit\s+(?:the\s+)?files?\s+only\b|"
+    r"(?:tests?|commands?|anything|checks?)\b"
+    r"(?!\s+(?:destructive|dangerous|risky|irreversible|that|which|without|against)\b)|"
+    r"\bskip\s+(?:the\s+|running\s+)?tests?\b|"
     # 하지 only right after the noun: "테스트를 통과하지 않고는" is a demand, not a ban.
-    r"(?:테스트|명령|커맨드)[^\n.?!]{0,15}?(?:돌리지|실행하지|돌리면\s*안)\s*(?:" + _KO_STOP + r"|않고(?!는))|"
-    r"(?:테스트|명령|커맨드)\s*(?:은|는|을|를|도)?\s*하지\s*(?:" + _KO_STOP + ")|"
-    r"(?:아무|어떤)\s*(?:명령|커맨드)도|아무\s*것도\s*(?:실행|돌리)|파일만\s*(?:수정|고쳐|바꿔|편집)"
+    r"(?:테스트|검증|명령|커맨드)[^\n.?!]{0,15}?(?:돌리지|실행하지|돌리면\s*안)\s*(?:" + _KO_STOP + r"|않고(?!는))|"
+    r"(?:테스트|검증|명령|커맨드)\s*(?:은|는|을|를|도)?\s*하지\s*(?:" + _KO_STOP + ")|"
+    # A ban verb is required: "왜 아무 명령도 실행 안 했어?" is a complaint and
+    # "아무것도 실행이 안 돼" a bug report. "파일만 수정해" is scope, not a ban.
+    r"(?:아무|어떤)\s*(?:명령|커맨드)도\s*(?:실행하|돌리|쓰)" + _KO_BAN + "|"
+    r"아무\s*것도\s*(?:실행하|돌리)" + _KO_BAN
 )
-# A negation around the match turns it into a demand: "don't skip the tests",
-# "don't finish without running the tests", "테스트 돌리지 않고 끝내지 마".
-_NEG_BEFORE_RE = re.compile(r"(?i)\b(?:don'?t|do not|never|not|no)\b[^.?!\n]*$")
-_NEG_AFTER_RE = re.compile(r"^[^.?!\n]*지\s*(?:마|말)")
+# A negation right around the match turns it into a demand: "don't skip the tests",
+# "don't finish without running the tests", "테스트 돌리지 않고 끝내지 마". Adjacent
+# only: "No worries, skip the tests" and "…않고 수정만 하고, 커밋하지 마" are bans.
+_NEG_BEFORE_RE = re.compile(r"(?i)\b(?:don'?t|do not|never|not)\s+(?:\w+\s+){0,2}$")
+_NEG_AFTER_RE = re.compile(r"^\s*[가-힣A-Za-z]{1,8}지\s*(?:마|말)")
+# "같은 명령을 다시 실행하지 마세요" bans a repeat, not checking (seen in a real prompt).
+_KO_REPEAT_RE = re.compile(r"같은|다시|\b또\b")
 # A follow-up that asks for a check ends the prohibition instead of inheriting it.
 # Imperatives only: "확인했어, 계속" / "keep running with it" are not requests for a check.
 _ASKS_CHECK_RE = re.compile(
@@ -87,7 +97,8 @@ def forbids_verification(prompt: str) -> bool:
         word = m.group(0).lower()
         before, after = text[:m.start()], text[m.end():]
         if (word.startswith(("skip", "without")) and _NEG_BEFORE_RE.search(before)) or \
-                (word.endswith("않고") and _NEG_AFTER_RE.search(after)):
+                (word.endswith("않고") and _NEG_AFTER_RE.search(after)) or \
+                _KO_REPEAT_RE.search(text[max(0, m.start() - 4):m.end()]):
             continue
         return True
     return False
@@ -144,6 +155,8 @@ def context_for_mode(mode: str, risk_flags: list[str], verify_forbidden: bool = 
                      "say plainly that the change is unverified. The gate will not block on it.")
     if mode == "quick":
         lines.append("Keep it concise; no forced verification.")
+    elif verify_forbidden:
+        pass  # the normal/deep "run a check" line would contradict the user's ban
     elif mode == "normal":
         lines.append("If files change, run one relevant verification command or state why none applies.")
     elif mode == "deep":
