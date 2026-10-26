@@ -70,7 +70,7 @@ A short follow-up like "yes, go ahead" keeps the previous mode. "Just explain" a
 </p>
 
 - **At most two reminders per request.** After that Claude finishes, and you see "files changed this turn but no successful verification was observed".
-- **Your word wins.** Say "don't run the tests" or "어떤 명령도 돌리지 마" and there is no reminder: Claude is told not to run anything and to say the change is unchecked.
+- **Your word wins.** Say "don't run the tests" or "어떤 명령도 돌리지 마" and there is no reminder: Claude is told the gate read it that way and, if that is what you meant, not to run anything and to say the change is unchecked. Only common phrasings are recognised; for others ("no need to run the tests") the reminder still comes, but it tells Claude a "don't run" from you outranks it.
 - **Background work pauses it.** While a test run or subagent is still going, the session isn't done, so nothing is held back.
 - **It fails open.** Any internal error lets Claude finish.
 - **How it reads a check.** It parses the shell command (pytest, npm test, cargo test, go test, make check, `python test_x.py`, …) and its output, including `; echo "exit=$?"` endings. That parsing is a heuristic: expect an occasional wrong reminder, or a missed one.

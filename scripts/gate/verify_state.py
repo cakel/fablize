@@ -62,7 +62,7 @@ def should_block_stop(ledger: dict[str, Any]) -> tuple[bool, str]:
     block, reason = _gap(ledger)
     # The user forbade running checks this turn: warn (warning_after_max_blocks),
     # never push the model to run what the user just ruled out.
-    if block and ledger.get("verify_forbidden"):
+    if block and ledger.get("verify_forbidden") is True:
         return False, ""
     return block, reason
 
@@ -86,8 +86,11 @@ def _gap(ledger: dict[str, Any]) -> tuple[bool, str]:
     if mode == "deep" and changed and not verified:
         # The old text offered "or, if none applies, say so" as a way out; saying so
         # never released the gate, only the 2-reminder cap did.
+        # The user's ban outranks the gate even when the prompt matcher missed it
+        # ("테스트 돌릴 필요 없어"): the model may answer the block by saying so.
         return True, ("fablize gate: run the narrowest verification command for the changed behavior "
-                      "before the final response. If none can run, say why in the final response — "
+                      "before the final response. If none can run, or the user said not to run "
+                      "tests/commands, do not run them; say so in the final response — "
                       "this reminder repeats at most twice, then the turn ends with an unverified warning to the user.")
     # deep-only: normal mode no longer hard-blocks; it keeps an advisory prompt nudge.
     return False, ""
@@ -102,6 +105,6 @@ GAP_WARNING = ("fablize gate: files changed this turn but no successful verifica
 def warning_after_max_blocks(ledger: dict[str, Any]) -> str:
     if int(ledger.get("stop_blocks") or 0) >= MAX_STOP_BLOCKS and not has_successful_verification(ledger):
         return GAP_WARNING
-    if ledger.get("verify_forbidden") and _gap(ledger)[0]:
+    if ledger.get("verify_forbidden") is True and _gap(ledger)[0]:
         return GAP_WARNING
     return ""

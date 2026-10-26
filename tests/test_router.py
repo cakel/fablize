@@ -133,12 +133,54 @@ check("forbid-verify: qualified rules / complaints / scope are not bans",
       [False] * 6)
 check("forbid-verify: a distant negation does not cancel a ban",
       [forbids_verification(p_) for p_ in [
-          "No worries, skip the tests", "테스트 돌리지 않고 수정만 하고, 커밋하지 마", "검증하지 말고 수정만 해",
-          "아무것도 실행하지 마"]], [True] * 4)
+          "No worries, skip the tests", "아무것도 실행하지 마"]], [True] * 2)
+# Third review (141 adversarial prompts): common endings / objects / verbs are bans;
+# questions, complaints, qualified KO rules and specified behavior are not.
+check("forbid-verify: common phrasings",
+      [forbids_verification(p_) for p_ in [
+          "테스트 돌리면 안 돼", "테스트 돌리지 마시고 수정만 해주세요", "테스트 실행하지 마요", "테스트 돌리지 마라",
+          "테스트 실행은 하지 마", "테스트는 생략해줘", "테스트 단계는 건너뛰어", "테스트 금지, 코드만 바꿔",
+          "pytest 돌리지 마", "test는 돌리지 마", "don't run pytest", "don't run the unit tests",
+          "Tests are slow, don't run them", "skip running the tests", "Don't bother running the tests.",
+          "Don't test it, just push the change", "don’t run the tests"]], [True] * 17)
+check("forbid-verify: questions / complaints / qualified / specified behavior",
+      [forbids_verification(p_) for p_ in [
+          "테스트 실행하지 않고 머지했어? 다시 확인해", "테스트 돌리지 않고 PR 올리지 마세요", "Did you skip the tests?",
+          "위험한 명령은 실행하지 마세요", "배포 명령은 실행하지 마", "In dry-run mode, don't execute commands, just print them",
+          "테스트 모드에서는 명령을 실행하지 말고 로그만 찍도록 수정해줘", "Don't run tests in parallel",
+          "Don't run the tests again, they passed already", "Don't run the full test suite, just the auth tests",
+          "CI가 테스트를 건너뛰고 있어. 고쳐줘", "Configure pytest to skip tests that require a GPU",
+          "Add a marker to skip the tests on Windows", "Why does pytest skip tests in this folder",
+          "docker 명령은 실행하지 마"]],
+      [False] * 15)
+# Fourth review (94 near-miss non-bans): whole classes, not phrasings — another run
+# asked for, 검증 as input validation, quotes, questions without "?", complaints,
+# specified behavior / config, a KO subject doing it.
+check("forbid-verify: alternatives / validation / quotes / questions / complaints / config",
+      [forbids_verification(p_) for p_ in [
+          "로컬에서 테스트 돌리지 말고 CI에서 돌려줘", "Don't run pytest directly, use make test.",
+          "Don't run the integration tests, only the unit tests please.",
+          "프론트에서 검증하지 말고 서버에서 검증하도록 바꿔줘", "이거 테스트 돌리면 안 되나요",
+          "How do I mvn install without running the tests",
+          "이 README 문구 영어로 번역해줘: '운영 DB에 연결된 상태에서는 테스트 돌리지 마세요.'",
+          "You never run the tests before saying done. Fix the bug and verify it this time.",
+          "It shouldn't ship without running the tests.", "Last time you committed without running the tests.",
+          "pre-commit에서는 테스트 돌리지 말고 린트만 하게 설정해줘", "In pytest.ini, skip tests marked slow by default.",
+          "CI가 테스트 건너뛰고 그냥 초록불 띄워, 원인 찾아줘", "플래그가 있으면 명령 실행하지 말고 출력만 하도록 바꿔줘",
+          "CI에서 테스트 돌리면 안 되는 브랜치 목록 정리해줘"]], [False] * 15)
+check("forbid-verify: a second ban is not an alternative run; 실행 금지 is a ban",
+      [forbids_verification(p_) for p_ in [
+          "Don't run tests. Don't run the linter. Just the fix.", "이 PR은 테스트 실행 금지입니다"]], [True, True])
+from classify_task import _ASKS_CHECK_RE  # noqa: E402
+check("asks-check: a report of a run the user did is not a request",
+      [bool(_ASKS_CHECK_RE.search(p_)) for p_ in
+       ["테스트 돌려봤는데 통과했어, 계속해", "테스트 실행 결과 괜찮네, 계속", "yes, and check out a new branch first",
+        "테스트 진행해줘"]], [False, False, False, True])
 from classify_task import context_for_mode  # noqa: E402
-check("context: a ban drops the contradicting run-a-check line",
-      [("verify changed behavior" in context_for_mode("deep", [], True),
-        "run one relevant verification" in context_for_mode("normal", [], True))], [(False, False)])
+check("context: a ban replaces the run-a-check line with a hint the model can overrule",
+      [("Define the exit proof" in context_for_mode("deep", [], True),
+        "run one relevant verification" in context_for_mode("normal", [], True),
+        "If they did not, verify" in context_for_mode("deep", [], True))], [(False, False, True)])
 from classify_task import _ASKS_CHECK_RE  # noqa: E402
 check("asks-check: only an imperative lifts the ban",
       ([bool(_ASKS_CHECK_RE.search(p_)) for p_ in ["확인했어, 계속", "keep running with it", "응 계속"]],

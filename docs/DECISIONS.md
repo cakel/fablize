@@ -87,6 +87,17 @@ to see what the model was doing when the gate fired.
   - Same smoke: Opus ended checks with `; echo "exit=$?"`, which exits 0 whatever the test
     did; an echoed `exit=1` was read as "unknown" and would have passed the gate. Fixed
     (echoed nonzero status = failure).
+  - 2026-10-26, PR #18 reviews: the "don't run" matcher (`forbids_verification`) was
+    patched phrase by phrase for three rounds and each round found new misreads. Stopped
+    there (ROI plateau) and made both misreads cheap instead: a ban is a hint the model
+    can overrule, and the block reason itself accepts "the user said not to run". The
+    regex stays high-precision / low-recall; residual false bans after the last round are
+    4 of 94 near-miss prompts, misses are mostly permission forms ("안 돌려도 돼").
+    `stop_user_forbade` counts in `events.jsonl` are therefore a lower bound on real bans.
+  - **Revisit the matcher when:** a user reports the gate going quiet on a turn they
+    expected it to block (false ban), or `stop_user_forbade` sessions show the model
+    skipping a check the user did ask for. A heavier fix (a model call, or dropping the
+    matcher and relying on the block-reason text alone) is the next step, not more regex.
 
 ## D3. Re-measure effect with harder tasks and a clean baseline
 

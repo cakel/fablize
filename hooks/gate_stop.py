@@ -101,6 +101,11 @@ def main() -> int:
     # model; the conversation continues" (Claude Code's schema) — a third block
     # by another name, past the cap. The model is done; the note is for the user.
     warning = warning_after_max_blocks(ledger)
+    # The holdout off arm is a pure baseline: no gate output on this path either.
+    if warning and _holdout_suppresses(input_data):
+        _log_holdout(input_data, warning)
+        emit_json({})
+        return 0
     if warning:
         capped = int(ledger.get("stop_blocks") or 0) >= MAX_STOP_BLOCKS
         _log_decision(input_data, ledger, "stop_cap_warning" if capped else "stop_user_forbade")

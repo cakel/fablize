@@ -162,9 +162,10 @@ def main() -> int:
         mode = ledger.get("task_mode") or "quick"
         emit_json({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
                                           "additionalContext": context_for_mode(mode, list(ledger.get("risk_flags") or []),
-                                                                                bool(ledger.get("verify_forbidden")))}})
+                                                                                ledger.get("verify_forbidden") is True)}})
         return 0
     mode, risks = classify_prompt(prompt)
+    own_mode = mode
     forbidden = forbids_verification(prompt)
     notice = stale_setup_notice()
     show_notice = False
@@ -201,9 +202,11 @@ def main() -> int:
         ledger["stop_blocks"] = 0
         ledger["unverified_change"] = False
         # "ok, go on" after "don't run the tests" is still under that prohibition;
-        # a follow-up that asks for a check ("now run the tests") lifts it.
-        if not forbidden and is_continuation(prompt) and not _ASKS_CHECK_RE.search(prompt):
-            forbidden = bool(ledger.get("verify_forbidden"))
+        # a follow-up that asks for a check ("now run the tests") lifts it. A prompt
+        # that is deep on its own ("승인합니다. 이제 결제 모듈 철저히 리팩터해줘") is a new
+        # task, even with an approval word in it, and starts without the ban.
+        if not forbidden and own_mode != "deep" and is_continuation(prompt) and not _ASKS_CHECK_RE.search(prompt):
+            forbidden = ledger.get("verify_forbidden") is True
         ledger["verify_forbidden"] = forbidden
         add_unique(ledger, "risk_flags", risks)
 

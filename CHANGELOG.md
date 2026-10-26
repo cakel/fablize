@@ -25,6 +25,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
   A demand phrased with a negative is not a ban ("don't skip the tests", "테스트를 통과하지
   않고는 끝내지 마", "don't finish without running the tests"), and only an imperative
   ("now run the tests", "테스트 돌려줘") lifts a ban — "확인했어, 계속" keeps it (PR #18 review).
+  **Both misreads are made cheap instead of chasing every phrasing.** Three adversarial
+  rounds (141 mixed prompts, 119 mixed, 94 near-miss non-bans): false bans went 16 → 0,
+  11 → 2 and 86 → 4 (the 6 left are debatable or rare); 0 of 5,721 real prompts flagged.
+  Misses (mostly "no need to run" / "안 돌려도 돼" permission forms) are left to the block
+  reason. Filters drop whole classes, not phrasings: another run asked for ("로컬 말고 CI에서
+  돌려줘", "use make test", "only the unit tests"), questions without "?" ("돌리면 안 되나요",
+  "how do I … without running tests"), quoted or reported text, complaints and habits ("You
+  never run the tests", "committed without running"), specified behavior and config ("…하게
+  설정해줘", "if the flag is set", pytest.ini / marker / workflow), a KO subject doing it
+  ("CI가 테스트 건너뛰고"). 검증 is no longer a ban noun — it is usually input validation
+  ("프론트에서 검증하지 말고 서버에서").
+  the context line is a hint the model can overrule ("fablize read the user as forbidding…
+  if they did not, verify as usual"), and the block reason itself says a user's "don't run"
+  outranks it, so a missed ban costs a short reply, not a run against the user's word. The
+  matcher covers common forms only (마요/마라/마시고, 면 안 돼, 생략/스킵/건너뛰어, 금지, pytest,
+  "don't run them / the unit tests", "skip running", "don't test it") and drops the 않고 form
+  ("…않고 커밋했어?" is a complaint). Questions, KO-qualified rules ("위험한 명령은…"),
+  specified behavior ("in dry-run mode…") and method limits ("in parallel", "again") are
+  not bans. Hook fixes from the same review: a short prompt that is deep on its own
+  ("승인합니다. 이제 결제 모듈 철저히 리팩터해줘") is a new task and drops the ban; only a real
+  `true` counts as a ban; the holdout off arm stays a pure baseline under a ban.
 - **Docs split: short README, full guide.** README / README.ko are now idea, install and
   usage only, with an SVG of one turn (`docs/assets/turn-flow*.svg`). Components and their
   measured status, task modes, the stop check (with a decision SVG), goals.py, data written,
