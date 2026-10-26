@@ -1,0 +1,43 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Read-only token: fork PRs run on GitHub-hosted runners with no secrets and no
+# write access. Do not switch this repo to a self-hosted runner — on a public
+# repo any fork PR could run code on that machine.
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04   # oldest Python the README promises (3.8)
+            python: "3.8"
+          - os: ubuntu-latest
+            python: "3.13"
+          - os: windows-latest # hooks run in Git Bash on Windows
+            python: "3.13"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install --disable-pip-version-check pytest
+      - run: python -m pytest -q tests
