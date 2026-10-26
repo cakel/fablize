@@ -118,6 +118,16 @@ check("forbid-verify: not a prohibition",
       [forbids_verification(p_) for p_ in [
           "테스트 돌려줘", "add tests because there are no tests", "fix the bug and run tests",
           "명령 실행 결과를 설명해줘", "왜 테스트가 실패하지?", "refactor the auth module thoroughly"]], [False] * 6)
+# PR #18 review: a demand for tests must never read as a ban (double negatives).
+check("forbid-verify: demands phrased with a negative are not bans",
+      [forbids_verification(p_) for p_ in [
+          "테스트를 통과하지 않고는 끝내지 마", "don't skip the tests", "never skip tests",
+          "테스트 하지 않고 넘어가지 마", "don't finish without running the tests", "테스트 돌리지 않고 끝내지 마"]], [False] * 6)
+from classify_task import _ASKS_CHECK_RE  # noqa: E402
+check("asks-check: only an imperative lifts the ban",
+      ([bool(_ASKS_CHECK_RE.search(p_)) for p_ in ["확인했어, 계속", "keep running with it", "응 계속"]],
+       [bool(_ASKS_CHECK_RE.search(p_)) for p_ in ["이제 테스트 돌려줘", "now run the tests", "검증해줘"]]),
+      ([False] * 3, [True] * 3))
 hook("router.sh", {"prompt": "figure out why login fails", "session_id": "RT"})
 _ev = Path(_DATA) / "history" / "events.jsonl"
 check("router: matched signal logged without the prompt text",

@@ -17,6 +17,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
   what the user forbade. (docs/DECISIONS.md D2)
   Imperatives only ("검증하지 않았다" is a report) and not build tools ("do NOT run build
   tools" still allows read-only checks): 0 of 5,721 real prompts flagged.
+  A demand phrased with a negative is not a ban ("don't skip the tests", "테스트를 통과하지
+  않고는 끝내지 마", "don't finish without running the tests"), and only an imperative
+  ("now run the tests", "테스트 돌려줘") lifts a ban — "확인했어, 계속" keeps it (PR #18 review).
 - **Docs split: short README, full guide.** README / README.ko are now idea, install and
   usage only, with an SVG of one turn (`docs/assets/turn-flow*.svg`). Components and their
   measured status, task modes, the stop check (with a decision SVG), goals.py, data written,

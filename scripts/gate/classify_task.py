@@ -58,19 +58,39 @@ NORMAL_RE = re.compile(
 # 2026-10-26 smoke test cost two wasted turns on a model that obeyed the user.
 # Imperative only: "검증하지 않았다" is a report, not an instruction. Build tools are
 # left out — "do NOT run build tools (merge.py …)" still allows read-only checks.
+_KO_STOP = r"마(?![가-힣])|마세요|말고|말\s*것|말아"
 FORBID_VERIFY_RE = re.compile(
     r"(?i)\b(?:don'?t|do not|never|without)\s+(?:run(?:ning)?|execut\w*)\s+(?:the\s+|any\s+)?"
     r"(?:tests?|commands?|anything|checks?)\b|\bskip\s+(?:the\s+|running\s+)?tests?\b|"
     r"\bedit\s+(?:the\s+)?files?\s+only\b|"
-    r"(?:테스트|명령|커맨드)[^\n.?!]{0,15}?(?:돌리지|실행하지|하지|돌리면\s*안)\s*(?:마(?![가-힣])|마세요|말고|말\s*것|말아|않고)|"
+    # 하지 only right after the noun: "테스트를 통과하지 않고는" is a demand, not a ban.
+    r"(?:테스트|명령|커맨드)[^\n.?!]{0,15}?(?:돌리지|실행하지|돌리면\s*안)\s*(?:" + _KO_STOP + r"|않고(?!는))|"
+    r"(?:테스트|명령|커맨드)\s*(?:은|는|을|를|도)?\s*하지\s*(?:" + _KO_STOP + ")|"
     r"(?:아무|어떤)\s*(?:명령|커맨드)도|아무\s*것도\s*(?:실행|돌리)|파일만\s*(?:수정|고쳐|바꿔|편집)"
 )
+# A negation around the match turns it into a demand: "don't skip the tests",
+# "don't finish without running the tests", "테스트 돌리지 않고 끝내지 마".
+_NEG_BEFORE_RE = re.compile(r"(?i)\b(?:don'?t|do not|never|not|no)\b[^.?!\n]*$")
+_NEG_AFTER_RE = re.compile(r"^[^.?!\n]*지\s*(?:마|말)")
 # A follow-up that asks for a check ends the prohibition instead of inheriting it.
-_ASKS_CHECK_RE = re.compile(r"(?i)\b(?:test|verify|check|run)\w*|테스트|검증|확인|돌려|실행")
+# Imperatives only: "확인했어, 계속" / "keep running with it" are not requests for a check.
+_ASKS_CHECK_RE = re.compile(
+    r"(?i)\b(?:re-?)?run\s+(?:the\s+|a\s+|all\s+)?(?:tests?|checks?|it|them)\b|"
+    r"\b(?:test|verify|check)\s+(?:it|this|that|them|again)\b|\b(?:now|please|then|and)\s+(?:test|verify|check)\b|"
+    r"테스트\s*(?:를|도)?\s*(?:돌려|해\s*(?:줘|봐)|실행)|검증\s*해|돌려\s*(?:봐|줘|보)|실행해\s*(?:봐|줘)|확인해\s*(?:줘|봐)"
+)
 
 
 def forbids_verification(prompt: str) -> bool:
-    return bool(FORBID_VERIFY_RE.search(prompt or ""))
+    text = prompt or ""
+    for m in FORBID_VERIFY_RE.finditer(text):
+        word = m.group(0).lower()
+        before, after = text[:m.start()], text[m.end():]
+        if (word.startswith(("skip", "without")) and _NEG_BEFORE_RE.search(before)) or \
+                (word.endswith("않고") and _NEG_AFTER_RE.search(after)):
+            continue
+        return True
+    return False
 
 
 def classify_prompt(prompt: str) -> tuple[str, list[str]]:
