@@ -17,6 +17,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
   what the user forbade. (docs/DECISIONS.md D2)
   Imperatives only ("검증하지 않았다" is a report) and not build tools ("do NOT run build
   tools" still allows read-only checks): 0 of 5,721 real prompts flagged.
+- **Docs split: short README, full guide.** README / README.ko are now idea, install and
+  usage only, with an SVG of one turn (`docs/assets/turn-flow*.svg`). Components and their
+  measured status, task modes, the stop check (with a decision SVG), goals.py, data written,
+  setup details and limits moved to `docs/GUIDE.md` / `docs/GUIDE.ko.md`.
 - **Block reason no longer offers a way out it does not honour.** "…or, if none applies,
   say so" never released the gate; the text now says the reminder repeats at most twice and
   then ends the turn with an unverified warning.

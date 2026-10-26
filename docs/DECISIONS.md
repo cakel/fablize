@@ -49,6 +49,8 @@ to see what the model was doing when the gate fired.
   written under `~/.fablize/`. Rejected: (b) keep the claims until D3 — shipping a claim
   the repo's own protocol calls unproven.
 - **Revisit when:** D3 produces a result — then a component may move to "measured".
+- **2026-10-26 (cakel.8):** README trimmed to idea / install / usage; the per-component
+  table with measured status now lives in `docs/GUIDE.md` (and `GUIDE.ko.md`).
 
 ## D2. Stop gate: blocking vs. advisory
 
