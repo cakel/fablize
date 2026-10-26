@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # fablize uninstall — remove the FABLIZE block from CLAUDE.md (idempotent).
-# The router hook is removed automatically when the plugin is uninstalled.
+# The plugin hooks (router + observation gate) are removed when the plugin is uninstalled.
 # Usage: uninstall.sh [global|local]
 set -euo pipefail
 
@@ -44,5 +44,5 @@ p.write_text(new, encoding="utf-8")
 print("  ✓ FABLIZE block removed" if new != cur else "  = no FABLIZE block (already removed)")
 PY
 
-echo "fablize uninstall complete ($scope). The router hook is removed when you /plugin uninstall."
+echo "fablize uninstall complete ($scope). The plugin hooks (router + observation gate) stay active until you /plugin uninstall."
 echo "  Backups ($CLAUDE_MD.fablize-bak.*) can be deleted manually if no longer needed."
