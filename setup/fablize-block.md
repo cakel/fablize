@@ -1,4 +1,4 @@
-<!-- FABLIZE:BEGIN — run Opus like Fable (always-on router). Effect status per component: README. Install/update: fablize setup.sh -->
+<!-- FABLIZE:BEGIN — run Opus like Fable (always-on router). Effect status per component: docs/GUIDE.md. Install/update: fablize setup.sh -->
 ## Operating mode (always on — auto-route by task signal)
 
 Apply what the task signals; with no signal, baseline only. Read each pack only when needed. Routing: smallest matching discipline only, overlap only when genuinely multi-category, mimic observable behavior only.

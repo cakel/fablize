@@ -49,6 +49,8 @@ to see what the model was doing when the gate fired.
   written under `~/.fablize/`. Rejected: (b) keep the claims until D3 — shipping a claim
   the repo's own protocol calls unproven.
 - **Revisit when:** D3 produces a result — then a component may move to "measured".
+- **2026-10-26 (cakel.8):** README trimmed to idea / install / usage; the per-component
+  table with measured status now lives in `docs/GUIDE.md` (and `GUIDE.ko.md`).
 
 ## D2. Stop gate: blocking vs. advisory
 
@@ -62,6 +64,11 @@ to see what the model was doing when the gate fired.
   the gate, which a model can satisfy with a trivial command).
 - **Options:** (a) keep blocking; (b) advisory only — `systemMessage`/`additionalContext`
   with no `decision: block`; (c) block only for `deep` mode, advise for `normal`.
+- **Partly decided 2026-10-26 (cakel.8):** the user's instruction outranks the gate. A
+  prompt that forbids running checks turns a would-be block into the user-facing
+  unverified warning (`stop_user_forbade`), and the block text no longer offers "say so" as
+  a way out. Blocking vs advisory in general is still open (deep already blocks, normal
+  already only advises — option (c) is the current behaviour).
 - **What to look at:** in `events.jsonl`, the share of `stop_block` events followed by a
   `stop_cap_warning` in the same session (the model never satisfied the gate — likely a
   false block or an unverifiable change), and `change_kinds` / `mode` of those events.
@@ -74,9 +81,23 @@ to see what the model was doing when the gate fired.
     on its own, and said behaviour was untested. `py_compile` counts as a verification,
     so no block. The user's "no tests" was respected and the gap disclosed — but a syntax
     check satisfied a deep gate for a behaviour change (the §3-2 ceremonial-check risk).
+  - Same smoke, "어떤 명령도 돌리지 말고 파일만 수정해" (deep): blocked twice, then the cap
+    warning. The model refused both times citing the user, as the block text allowed ("say so"),
+    yet the gate kept blocking — two wasted turns. Fixed in cakel.8 (above).
   - Same smoke: Opus ended checks with `; echo "exit=$?"`, which exits 0 whatever the test
     did; an echoed `exit=1` was read as "unknown" and would have passed the gate. Fixed
     (echoed nonzero status = failure).
+  - 2026-10-26, PR #18 reviews: the "don't run" matcher (`forbids_verification`) was
+    patched phrase by phrase for three rounds and each round found new misreads. Stopped
+    there (ROI plateau) and made both misreads cheap instead: a ban is a hint the model
+    can overrule, and the block reason itself accepts "the user said not to run". The
+    regex stays high-precision / low-recall; residual false bans after the last round are
+    4 of 94 near-miss prompts, misses are mostly permission forms ("안 돌려도 돼").
+    `stop_user_forbade` counts in `events.jsonl` are therefore a lower bound on real bans.
+  - **Revisit the matcher when:** a user reports the gate going quiet on a turn they
+    expected it to block (false ban), or `stop_user_forbade` sessions show the model
+    skipping a check the user did ask for. A heavier fix (a model call, or dropping the
+    matcher and relying on the block-reason text alone) is the next step, not more regex.
 
 ## D3. Re-measure effect with harder tasks and a clean baseline
 

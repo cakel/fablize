@@ -16,7 +16,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts" / "gate"))
 
 from ledger import add_unique, emit_json, load_ledger, read_stdin_json, update_ledger
-from classify_task import NO_EDIT_RE, QUICK_RE, classify_prompt, context_for_mode
+from classify_task import (NO_EDIT_RE, QUICK_RE, _ASKS_CHECK_RE, classify_prompt, context_for_mode,
+                           forbids_verification)
 
 
 def _version_key(value: str) -> tuple[int, ...]:
@@ -160,14 +161,17 @@ def main() -> int:
         ledger = load_ledger(input_data)
         mode = ledger.get("task_mode") or "quick"
         emit_json({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
-                                          "additionalContext": context_for_mode(mode, list(ledger.get("risk_flags") or []))}})
+                                          "additionalContext": context_for_mode(mode, list(ledger.get("risk_flags") or []),
+                                                                                ledger.get("verify_forbidden") is True)}})
         return 0
     mode, risks = classify_prompt(prompt)
+    own_mode = mode
+    forbidden = forbids_verification(prompt)
     notice = stale_setup_notice()
     show_notice = False
 
     def apply(ledger):
-        nonlocal show_notice, mode, risks
+        nonlocal show_notice, mode, risks, forbidden
         # "continue", "yes go ahead", "응 진행해" carry no task words, so they fell
         # through to the quick default — and a deep task's next turn could edit
         # code and stop unverified. Only an EXPLICIT quick ask ("briefly",
@@ -197,11 +201,18 @@ def main() -> int:
         ledger["failures"] = []
         ledger["stop_blocks"] = 0
         ledger["unverified_change"] = False
+        # "ok, go on" after "don't run the tests" is still under that prohibition;
+        # a follow-up that asks for a check ("now run the tests") lifts it. A prompt
+        # that is deep on its own ("승인합니다. 이제 결제 모듈 철저히 리팩터해줘") is a new
+        # task, even with an approval word in it, and starts without the ban.
+        if not forbidden and own_mode != "deep" and is_continuation(prompt) and not _ASKS_CHECK_RE.search(prompt):
+            forbidden = ledger.get("verify_forbidden") is True
+        ledger["verify_forbidden"] = forbidden
         add_unique(ledger, "risk_flags", risks)
 
     update_ledger(input_data, apply)
 
-    context = context_for_mode(mode, risks)
+    context = context_for_mode(mode, risks, forbidden)
     if show_notice:
         context = notice + "\n" + context
 

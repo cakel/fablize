@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 560" width="760" height="560" font-family="Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Segoe UI, sans-serif" role="img" aria-labelledby="t d">
+  <title id="t">Stop 게이트가 Claude를 붙잡는 때</title>
+  <desc id="d">Claude가 끝내려 할 때, 가볍거나 보통 작업이면, 아무것도 안 바뀌었거나 문서만 바뀌었으면, 확인이 실행되어 통과했으면 그대로 끝난다. 사용자가 테스트를 돌리지 말라고 했거나 이미 두 번 알렸으면 사용자에게 미검증 알림을 남기고 끝난다. 그 밖에는 확인을 먼저 하라고 알리고 다시 시도하게 한다.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/>
+    </marker>
+  </defs>
+  <rect x="0.5" y="0.5" width="759" height="559" rx="16" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="40" y="38" font-size="18" font-weight="700" fill="#111827">fablize는 언제 “아직”이라고 할까?</text>
+
+  <rect x="60" y="56" width="340" height="40" rx="20" fill="#f3f4f6" stroke="#d1d5db"/>
+  <text x="230" y="81" font-size="14" font-weight="700" fill="#111827" text-anchor="middle">Claude가 끝내려 함</text>
+
+  <!-- questions: yes = finish -->
+  <g font-size="14" fill="#1e3a8a">
+    <rect x="60" y="120" width="340" height="46" rx="10" fill="#eff6ff" stroke="#3b82f6"/>
+    <text x="76" y="148">가볍거나 보통 작업인가? (“철저히” 아님)</text>
+    <rect x="60" y="190" width="340" height="46" rx="10" fill="#eff6ff" stroke="#3b82f6"/>
+    <text x="76" y="218">바뀐 게 없거나 문서만 바뀌었나?</text>
+    <rect x="60" y="260" width="340" height="46" rx="10" fill="#eff6ff" stroke="#3b82f6"/>
+    <text x="76" y="288">확인을 돌렸고 통과했나?</text>
+    <rect x="60" y="330" width="340" height="46" rx="10" fill="#eff6ff" stroke="#3b82f6"/>
+    <text x="76" y="358">“테스트 돌리지 마”라고 했나?</text>
+    <rect x="60" y="400" width="340" height="46" rx="10" fill="#eff6ff" stroke="#3b82f6"/>
+    <text x="76" y="428">이미 두 번 알렸나?</text>
+  </g>
+
+  <g stroke="#6b7280" stroke-width="2" marker-end="url(#a)">
+    <line x1="230" y1="96" x2="230" y2="116"/>
+    <line x1="230" y1="166" x2="230" y2="186"/>
+    <line x1="230" y1="236" x2="230" y2="256"/>
+    <line x1="230" y1="306" x2="230" y2="326"/>
+    <line x1="230" y1="376" x2="230" y2="396"/>
+    <line x1="230" y1="446" x2="230" y2="470"/>
+    <line x1="400" y1="143" x2="466" y2="143"/>
+    <line x1="400" y1="213" x2="466" y2="213"/>
+    <line x1="400" y1="283" x2="466" y2="283"/>
+    <line x1="400" y1="353" x2="466" y2="353"/>
+    <line x1="400" y1="423" x2="466" y2="423"/>
+  </g>
+  <g font-size="12" fill="#6b7280">
+    <text x="238" y="181">아니오</text><text x="238" y="251">아니오</text><text x="238" y="321">아니오</text>
+    <text x="238" y="391">아니오</text><text x="238" y="462">아니오</text>
+    <text x="426" y="136">예</text><text x="426" y="206">예</text><text x="426" y="276">예</text>
+    <text x="426" y="346">예</text><text x="426" y="416">예</text>
+  </g>
+
+  <!-- outcomes -->
+  <rect x="470" y="120" width="250" height="186" rx="12" fill="#ecfdf5" stroke="#10b981"/>
+  <text x="595" y="206" font-size="16" font-weight="700" fill="#065f46" text-anchor="middle">끝냄</text>
+  <text x="595" y="230" font-size="12" fill="#065f46" text-anchor="middle">붙잡을 이유 없음</text>
+  <rect x="470" y="330" width="250" height="116" rx="12" fill="#fefce8" stroke="#ca8a04"/>
+  <text x="595" y="378" font-size="16" font-weight="700" fill="#854d0e" text-anchor="middle">끝냄 + 사용자에게 알림</text>
+  <text x="595" y="402" font-size="12" fill="#854d0e" text-anchor="middle">“바뀌었지만 확인 안 됨”</text>
+
+  <!-- reminder loops back -->
+  <rect x="60" y="474" width="340" height="56" rx="12" fill="#fff7ed" stroke="#f97316"/>
+  <text x="76" y="498" font-size="14" font-weight="700" fill="#9a3412">Claude에게 알림: “먼저 확인하세요”</text>
+  <text x="76" y="518" font-size="12" fill="#9a3412">Claude는 작업을 이어 가고 다시 시도</text>
+  <path d="M60,502 H36 V76 H56" fill="none" stroke="#f97316" stroke-width="2" marker-end="url(#a)"/>
+</svg>

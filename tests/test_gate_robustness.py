@@ -183,6 +183,59 @@ for p in ["Yes, go ahead and implement it", "네, 수정해주세요", "ok fix i
           "task mode: deep" in out.get("hookSpecificOutput", {}).get("additionalContext", ""))
 
 
+# --- P. the user forbids running checks: warn the user, never block (D2, cakel.8) ---
+EDIT = {"tool_name": "Edit", "tool_input": {"file_path": "src/x.py", "old_string": "a", "new_string": "b"}}
+for p_ in ["calc.py 철저히 리팩터해줘. 테스트는 돌리지 마",
+           "refactor the auth module thoroughly, don't run any commands, just edit the file"]:
+    dd = tempfile.mkdtemp(prefix="fz_")
+    ctx = as_json(run("gate_prompt.py", {"prompt": p_, "session_id": "P", "cwd": "/w"}, dd))
+    check(f"forbidden turn: the model is told the ban was read (a hint, not an order): {p_[:30]}",
+          "forbidding tests/commands" in ctx.get("hookSpecificOutput", {}).get("additionalContext", ""))
+    run("gate_post_tool.py", dict(EDIT, session_id="P", cwd="/w"), dd)
+    out = as_json(run("gate_stop.py", {"session_id": "P", "cwd": "/w"}, dd))
+    check(f"forbidden turn: no block, unverified warning to the user: {p_[:30]}",
+          out.get("decision") != "block" and "unverified" in out.get("systemMessage", ""))
+    ev = os.path.join(dd, "history", "events.jsonl")
+    check(f"forbidden turn: logged as stop_user_forbade: {p_[:30]}",
+          os.path.exists(ev) and "stop_user_forbade" in open(ev, encoding="utf-8").read())
+dd = tempfile.mkdtemp(prefix="fz_")
+run("gate_prompt.py", {"prompt": "calc.py 철저히 리팩터해줘. 테스트는 돌리지 마", "session_id": "Q", "cwd": "/w"}, dd)
+run("gate_prompt.py", {"prompt": "응 계속", "session_id": "Q", "cwd": "/w"}, dd)
+run("gate_post_tool.py", dict(EDIT, session_id="Q", cwd="/w"), dd)
+check("a bare follow-up keeps the prohibition", not blocks(run("gate_stop.py", {"session_id": "Q", "cwd": "/w"}, dd)))
+dd = tempfile.mkdtemp(prefix="fz_")
+run("gate_prompt.py", {"prompt": "calc.py 철저히 리팩터해줘. 테스트는 돌리지 마", "session_id": "R", "cwd": "/w"}, dd)
+run("gate_prompt.py", {"prompt": "refactor it thoroughly again and run the tests", "session_id": "R", "cwd": "/w"}, dd)
+run("gate_post_tool.py", dict(EDIT, session_id="R", cwd="/w"), dd)
+check("a follow-up that asks for checks lifts it (deep blocks again)",
+      blocks(run("gate_stop.py", {"session_id": "R", "cwd": "/w"}, dd)))
+# Review: a short prompt with an approval word that is deep on its own is a NEW task.
+dd = tempfile.mkdtemp(prefix="fz_")
+run("gate_prompt.py", {"prompt": "calc.py 철저히 리팩터해줘. 테스트는 돌리지 마", "session_id": "S", "cwd": "/w"}, dd)
+run("gate_prompt.py", {"prompt": "승인합니다. 이제 결제 모듈 전체를 철저히 리팩터해줘", "session_id": "S", "cwd": "/w"}, dd)
+run("gate_post_tool.py", dict(EDIT, session_id="S", cwd="/w"), dd)
+check("a new deep task with an approval word does not inherit the ban",
+      blocks(run("gate_stop.py", {"session_id": "S", "cwd": "/w"}, dd)))
+# Review: only a real True is a ban — "false" / "no" from a hand-edited ledger is not.
+sys.path.insert(0, os.path.join(os.path.dirname(HOOKS), "scripts", "gate"))
+sys.path.insert(0, os.path.join(os.path.dirname(HOOKS), "scripts", "shadow"))
+from verify_state import should_block_stop, warning_after_max_blocks  # noqa: E402
+_l = {"task_mode": "deep", "changed_files_seen": True, "change_kinds": ["code"], "verify_forbidden": "false"}
+check("a non-bool verify_forbidden is not a ban", (should_block_stop(_l)[0], warning_after_max_blocks(_l)) == (True, ""))
+# Review: the holdout off arm stays a pure baseline under a ban (no warning either).
+from shadow_logger import holdout_arm  # noqa: E402
+_off = next(s for i in range(5000) if holdout_arm(s := f"h{i}") == "off")
+dd = tempfile.mkdtemp(prefix="fz_")
+run("gate_prompt.py", {"prompt": "calc.py 철저히 리팩터해줘. 테스트는 돌리지 마", "session_id": _off, "cwd": "/w"}, dd)
+run("gate_post_tool.py", dict(EDIT, session_id=_off, cwd="/w"), dd)
+os.environ["FABLIZE_HOLDOUT"] = "1"
+try:
+    _out = as_json(run("gate_stop.py", {"session_id": _off, "cwd": "/w"}, dd))
+finally:
+    os.environ.pop("FABLIZE_HOLDOUT", None)
+check("holdout off arm: no warning under a ban either", _out == {})
+
+
 def main():
     print("=" * 80)
     print("fablize observation gate — robustness / safety checks")
