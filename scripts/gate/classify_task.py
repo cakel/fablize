@@ -28,6 +28,24 @@ DEEP_RE = re.compile(
     r"migration|database|auth|security|refactor|large|complex|implement the plan)\b|"
     r"끝까지|철저|전부|전체|배포|마이그레이션|인증|보안|리팩터"
 )
+# Debugging / root-cause signals, shared with router.sh (one list, one place).
+# "Find the root cause" / "figure out why" / "빌드가 깨졌어" carry no action verb,
+# so they used to classify as quick — "no forced verification" on exactly the task
+# that most needs it. "error handling" / "오류 처리" is a feature request, not a bug.
+DEBUG_RE = re.compile(
+    r"(?i)\b(?:debug\w*|bugs?|bugfix|traceback|stack ?trace|crash\w*|segfault|"
+    r"regression|flaky|failing|fails|failed|broken|hangs?|hanging|root[- ]cause|"
+    r"not working|doesn'?t work|does not work|stopped working|figure out why|why (?:does|is|do|are|did|won'?t|isn'?t|doesn'?t|can'?t))\b|"
+    r"\b(?:errors?|exceptions?|failures?)\b(?!\s+(?:handling|handlers?|messages?|modes?|pages?|boundar\w*|codes? (?:list|table)))|"
+    r"디버그|버그|트레이스백|크래시|예외|회귀|재현|근본\s?원인|원인|깨졌|깨져|깨진|실패|먹통|멈춰|멈췄|죽어|죽었|"
+    r"(?:에러|오류)(?!\s*(?:처리|핸들링|메시지|페이지))|작동하지 않|동작하지 않|작동 안|동작 안|안 되는 이유|왜 안"
+)
+# Render / executable artifacts → verification-grounding pack. Bare 그래프 is left
+# out: "그래프 DB" is not a render target.
+RENDER_RE = re.compile(
+    r"(?i)\b(?:html|svg|games?|canvas|charts?|render\w*|website|webpage|dashboard|ui)\b|"
+    r"차트|게임|캔버스|렌더|웹사이트|웹페이지|대시보드"
+)
 NORMAL_RE = re.compile(
     r"(?i)\b(implement|fix|debug|change|edit|create|build|test|lint|review|update)\b|"
     r"구현|수정|고쳐|디버그|작성|생성|테스트|검증"
@@ -53,15 +71,27 @@ def classify_prompt(prompt: str) -> tuple[str, list[str]]:
     # nothing. Risks are still recorded and surfaced; only the mode changes.
     # "no edits" is scope and stands alone; "briefly" is intensity and only
     # counts when no action verb asks for work.
-    if NO_EDIT_RE.search(text) or (QUICK_RE.search(text) and not NORMAL_RE.search(text)):
+    # A debugging signal is work even without a verb ("빌드가 깨졌어").
+    asks_work = bool(NORMAL_RE.search(text) or DEBUG_RE.search(text))
+    if NO_EDIT_RE.search(text) or (QUICK_RE.search(text) and not asks_work):
         return "quick", risks
     if DEEP_RE.search(text) or any(flag in risks for flag in ("production", "database", "remote-write")):
         return "deep", risks
-    if QUICK_RE.search(text) and not risks:
+    if QUICK_RE.search(text) and not risks and not DEBUG_RE.search(text):
         return "quick", risks
-    if NORMAL_RE.search(text):
+    if asks_work:
         return "normal", risks
     return "quick", risks
+
+
+def signals(prompt: str) -> list[tuple[str, str]]:
+    """Pack signals for router.sh: [(name, matched text), ...] in a stable order."""
+    out = []
+    for name, rx in (("investigation", DEBUG_RE), ("grounding", RENDER_RE)):
+        m = rx.search(prompt or "")
+        if m:
+            out.append((name, m.group(0)))
+    return out
 
 
 def context_for_mode(mode: str, risk_flags: list[str]) -> str:

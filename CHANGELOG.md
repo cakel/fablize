@@ -3,6 +3,227 @@
 All notable changes to fablize are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [SemVer](https://semver.org/).
 
+## [2.1.1+cakel.7] — 2026-10-23
+
+Review pass for running fablize under Sonnet/Opus on a Windows host: close the paths that
+surface a hook ERROR or silently do nothing, and make the one Fable-specific skill step
+(effort escalation) usable on any model.
+
+### Fixed
+
+- **Skill-verification fixes (2026-10-26).** From the skeptic audit of whether the skill
+  actually steers Sonnet/Opus:
+  - **Router and task-mode classifier share one signal list** (`classify_task.DEBUG_RE` /
+    `RENDER_RE`). "근본 원인 찾아서 고쳐줘", "Find the root cause…", "figure out why",
+    "빌드가 깨졌어" routed nothing and classified as quick ("no forced verification") — on
+    the task fablize exists for. They now route the investigation pack and classify as
+    normal; "Add error handling" / "오류 처리" no longer counts as a bug report.
+  - **finish-the-work.sh** passes messages waiting on the user ("…once you give the
+    go-ahead", "pending your approval", "승인 후 …하겠습니다"); blocking them pushed a
+    destructive step ahead of consent.
+  - **goals.py runs the final `--verify-cmd` itself** and completes only on exit 0, logging
+    the observed output; no-op commands are refused. `--verify-cmd false --verify-evidence
+    "trust me"` used to complete the plan.
+  - **Investigation pack** adds checking every sibling caller of the changed code (in
+    scope: same defect) and a regression test that fails before the fix.
+- **README claims match the evidence.** "Only procedures whose effect was verified" and
+  "What's included (verified only)" are replaced by a per-component table (how it runs,
+  measured or not). The observation gate — which blocks Stop and was not mentioned at all —
+  is described, the shipped recovery guard is no longer listed as "not shipped", the
+  early-stop hook is marked opt-in, and a "Data it writes" section lists `~/.fablize/`
+  ledgers, `events.jsonl` and `./.fablize/`.
+- **Decision log.** `docs/DECISIONS.md` records the open decisions (README effect claims,
+  blocking vs advisory gate, re-measurement, finish-the-work registration, goals.py
+  command execution) and what to inspect when one is questioned. Router signals, Stop-gate
+  blocks / cap warnings and finish-the-work blocks are appended out-of-band to
+  `~/.fablize/history/events.jsonl` (labels only, no prompt text; `FABLIZE_EVENTS=0` off).
+
+- **Hooks no longer hardcode `python3`.** New `hooks/py.sh` picks `python3`, `python` or `py`
+  and fails open when none exists. Entries under `WindowsApps` are probed, not skipped: that
+  directory holds both the Store stub and the real Store Python's alias. `hooks.json`,
+  `router.sh`, `finish-the-work.sh`, `setup.sh` and `uninstall.sh` all go through it (one copy
+  of the rule), and so do the `goals.py` commands in `SKILL.md` and the CLAUDE.md block.
+  `setup.sh` copies `py.sh` to `~/.fablize/lib/hooks/` for the block.
+- **`router.sh` is invoked as `bash "<path>"`**, like its siblings. A plugin root with a space
+  split the bare command; a host that cannot exec `.sh` by shebang dropped routing silently.
+- **`router.sh` routes Korean signals** (버그/에러/오류/디버그/크래시/작동하지 않…, 차트/게임/
+  렌더/웹페이지…). `classify_task.py` was already bilingual; the router was not. Bare 안 돼 and
+  그래프 are excluded as too ambiguous.
+- **Stop gate no longer treats `stop_hook_active` as a waiver.** The flag is set after ANY Stop
+  hook blocks, so one `finish-the-work.sh` reminder disabled the evidence gate for the rest of
+  the turn, skipped the holdout check, and made `MAX_STOP_BLOCKS` unreachable. The loop bound is
+  now the ledger's per-prompt `stop_blocks` cap alone. After the cap the gap note goes to the
+  user as `systemMessage` only; Stop has no `hookSpecificOutput`, and the model is done.
+- **A pytest crash or empty run counts as a failed verification.** `INTERNALERROR` and
+  `no tests ran` are in `FAILURE_RE`; before, `pytest tests` over script-style suites was
+  ledgered as `success=None`, which satisfied the Stop gate.
+- **`finish-the-work.sh` works on Windows.** The HOME/temp containment check moved into Python
+  (`C:\Users\…` never matched bash's `$HOME/*`) and also admits `$CLAUDE_CONFIG_DIR`, where
+  transcripts live when it is set. The transcript is read as UTF-8 (the cp949 default raised on
+  Korean text and was swallowed).
+- **`finish-the-work.sh` catches Korean promises** ("구현하겠습니다", "고칠게요") and lets Korean
+  offers through ("원하시면 …", "할까요"). The comment said English + Korean; the regex was English.
+- **`setup.sh` points at a stable `finish-the-work.sh`.** It used to name the version-pinned cache
+  path, which dangles after the next upgrade; the copy in `~/.fablize/lib/hooks/` (beside `py.sh`,
+  which it now needs) is refreshed by every setup run.
+- **`setup.sh` locates itself from its own path**, not `$CLAUDE_PLUGIN_ROOT`, which a session
+  opened before an upgrade can still hold for the old root.
+- **`setup.sh global` honours `CLAUDE_CONFIG_DIR`**, the directory Claude Code actually reads
+  `CLAUDE.md` from. `uninstall.sh` too.
+- **`setup.sh` without a scope and without a terminal** now exits with a message instead of a
+  silent exit 1 from `read` under `set -e`. `SKILL.md` names the scope argument.
+- **Stale-setup notice is no longer an order, and fires once per session.** It said "Run this
+  exact command" on every prompt, so a compliant model rewrote the user's global `CLAUDE.md`
+  mid-task. It now asks to run only with the user's agreement, and the ledger records it as shown.
+  Local setup records its project, and the notice `cd`s there instead of planting a second block
+  in whatever project the user is in.
+- **`SKILL.md` and READMEs give `uninstall.sh` its scope** (it exits without a terminal otherwise)
+  and quote every `${CLAUDE_PLUGIN_ROOT}` path, so a backslash or space survives bash.
+
+- **Python I/O is UTF-8 on Windows.** `py.sh` exports `PYTHONUTF8=1`. Without it hook stdin and
+  stdout used the locale codepage: `setup.sh` died on its own `✓` under cp949 after injecting the
+  block but before writing `progress.json`, `goals.py` raised after saving state, a Korean deep
+  prompt classified as quick, and a smart quote under cp1252 made every gate hook fail open.
+- **Failed tool calls reach the gate.** Claude Code fires `PostToolUseFailure`, not `PostToolUse`,
+  when a tool fails (a non-zero Bash exit included), and nothing was registered for it. A failing
+  `pytest` left no trace and an earlier pass still satisfied the Stop gate. It is now registered;
+  the failed run is recorded as `success=False` and disclosed under its own event name. A failed
+  Edit/Write counts as no change and an interrupt records nothing.
+- **The latest verification decides.** "pytest passed, edit, pytest failed, stop" used to pass
+  because any earlier non-failing result satisfied the gate.
+- **The ledger is keyed by session, not session+cwd.** `cwd` follows the Bash tool, so one `cd`
+  mid-turn sent the Edit and the Stop to a fresh quick-mode ledger and disarmed the gate.
+- **A shell error before a passing summary is a pass.** `ls build/ 2>&1; pytest -q` printing
+  `No such file or directory … 4 passed` was recorded as a failure and blocked the turn. A test
+  runner's own verdict (`1 failed, 3 passed`) still wins wherever it appears.
+- **Legacy fork releases 2.1.2 .. 2.1.8 rank below `2.1.1+cakel.1`.** The fork renumbered after
+  2.1.8, so anyone set up on one of those was refused setup forever by the downgrade guard and
+  told their session was the old one.
+- **macOS `/usr/bin/python3` without Command Line Tools** (an xcrun shim) is probed and skipped.
+  Not run on a Mac.
+
+- **Concurrent hooks no longer lose ledger writes or print errors.** Parallel tool calls run their
+  PostToolUse hooks at once; a shared `<key>.tmp` and an unlocked load→save kept 5–10 of 12 records
+  and showed `Permission denied` / `WinError 32`. The ledger now takes an `O_EXCL` lock file (stale
+  after 10s, never waits past 5s), writes a per-process temp file, and retries Windows replace.
+- **A verification counts only in command position.** `pip install pytest`, `cat jest.config.js` and
+  `git commit -m "fix lint"` were verifications. Runners are now matched at the head of a segment,
+  after env assignments and wrappers (`npx`, `uv run`, `bundle exec`, `timeout N`), and the list
+  covers `npm run test`, `dotnet test`, `./gradlew test`, `node --test`, `deno test`, `phpunit`,
+  `Invoke-Pester`, `py …`, `.venv/Scripts/python.exe …` and `bash hooks/py.sh …`.
+- **Shell edits are changes.** Redirects, heredocs into a file, `tee`, `sed -i`, `perl -pi`,
+  `git apply`, `patch` and `git checkout -- <path>` armed nothing, so a deep turn could edit code
+  that way and stop unchecked. Scratch targets (`/dev/null`, temp dirs, `*.log`, `2>&1`) and a
+  quoted `>` are not.
+- **A background launch is not a verification.** `run_in_background` (or a timeout that
+  backgrounds the call) returned an empty stdout that was recorded as `success=None`, which passed
+  the gate before the tests had run.
+- **`goals.py` never says "all stories complete" while one is blocked or failed**, and
+  `next --reopen <id>` retries one without `create --force`. Its output is UTF-8 even when run
+  without `py.sh`.
+- **`uninstall.sh` clears the recorded version**, so the next upgrade's notice no longer offers to
+  re-inject the block the user removed.
+- **Windows requires Git Bash** for the hooks; the READMEs now say so.
+
+- **Quoted text and heredoc bodies are not commands.** Segments used to split inside quotes, so
+  `git commit -m "wip; pytest still failing"` or a heredoc'd Makefile line `	pytest -q` became the
+  latest verification and passed the gate right after a real failing run.
+- **A bare follow-up keeps the task's mode.** "continue", "yes go ahead", "응 진행해" have no task
+  words and fell to quick, so a deep task's next turn could edit and stop unverified. Only an
+  explicit quick ask ("briefly", "설명만") drops the mode now.
+- **A change after a passing check needs a new check.** `unverified_change` is set by every
+  non-docs change and cleared by every non-failing verification.
+- **Scratch targets are not changes from any tool.** A Write into the `%TEMP%` scratchpad,
+  `rm -rf /tmp/x`, `rm "$TMPDIR/…"` and `cp report.json /tmp/` blocked report-only deep turns. A
+  copy now counts only its destination, and a PowerShell cmdlet only its `-Path`, not `-Value` text.
+- **`make clean` is not a verification**; bare `make` and `make test|check|lint|build|all` are.
+- **Unrelated output-less failures are not "the same failure repeated."** The failure summary now
+  leads with the command, so two different `Exit code 1` calls no longer trip the notice.
+- **Python 3.8+** is now stated in the READMEs (`from __future__ import annotations`).
+
+- **Round-4 regressions in the rewrites above, fixed before release.** A runner may now sit behind
+  any wrapper (`coverage run -m`, `npx --yes`, `python -X utf8 -m`, `nice -n 10`, `xvfb-run -a`,
+  `bash -c "…"`) unless the segment's command only reads, installs or records text. `make`
+  verifies by target (`make test 2>&1 | tail`, `make -C build test`; not `make clean`). A redirect
+  target after a space (`2> /dev/null`) is not a `cp` destination. `Copy-Item`/`Move-Item` count
+  `-Destination` (and a move its source); PowerShell switches no longer swallow the next path;
+  `$env:TEMP` is scratch. A `# comment` with an apostrophe no longer opens a "quote" over the
+  rest of the command. Mode is inherited only by a real go-ahead ("continue", "진행해"), not by
+  any keyword-free request. `finish-the-work.sh` treats "필요하시면 …" as an offer.
+
+- **Round-5 fixes.** A python command no longer scans its arguments for a runner name — fablize's
+  own `goals.py checkpoint --verify-cmd "pytest -q"` (a claim) was recorded as a verification.
+  Installs are not runs in any spelling (`python -m pip install`, `uv pip install`, `npx playwright
+  install`). `make` verifies for any target except clean/install/deploy/serve-style ones
+  (`make verify`, `make ci`). npm-family script names count after workspace flags
+  (`pnpm --filter web lint`). `python -X utf8 …` / `-W error` take a value. More go-ahead phrasings
+  keep the mode ("진행해 주세요", "go on", "let's continue"). A failing probe (`which python3`) no
+  longer draws "do not report completion"; only a failing check does. `finish-the-work.sh` lets
+  approval-gated promises through ("승인해 주시면 커밋하겠습니다", "once you confirm"), which it used to
+  order the model to carry out before approval. `tee out < in` no longer counts `in` as written.
+
+- **Round-6 fixes (differential test over 62,083 real commands and 4,826 prompts).** An inline
+  python program that writes a literal project path (`open("src/a.py","w")`, `p.write_text`) is a
+  change; an inline program that only asserts is a verification, but an edit script's `assert` is
+  not. Quoted multi-line arguments no longer read as redirects. Scratch is recognised through
+  variables (`S=…/scratchpad; cat > "$S/x"`), `cd` into scratch, and the macOS
+  `/var/folders/…/scratchpad`. `git stash`/`pull`/`merge`/`rebase`/`reset` are not changes, and a
+  run with the work stashed is not the latest verification (before/after proofs pass). Quoted
+  payloads a wrapper runs count (`ssh host "make"`, `rtk proxy "pytest"`); quoted data does not
+  (`--description "… node --test …"`). Tokens are quote-aware. Approvals and picks keep the mode
+  ("승인합니다", "Approved.", "go ahead with option 2", "A"): 2 → 156 of the corpus's follow-ups.
+  `CMakeLists.txt`/`requirements*.txt` are config.
+- **From another session's gate incident:** `gate.py`, `check.py`, `*_gate.py` and `.sh`/`.ps1`
+  checkers run through bash/pwsh count; `cmp` counts and its `differ:` is a failure. SKILL.md now
+  says how to make a custom check visible (§3-2).
+
+- **Round-7 fixes.** Heredoc handling is line-based and linear (the regex took 40s on 1,000
+  unterminated `<<`, past the 30s hook timeout), and heredoc bodies are never scanned for runnable
+  payloads: an edit script's `out_dir = "build"` or a commit message quoting `"pytest …"` made the
+  edit verify itself. A check run before a `git stash` proof in the same call is recorded as
+  ran-unknown instead of dropped, and a stash baseline is never a disclosed failure. Continuation
+  lines and inline-shell flags (`sh -euc`, `bash -lc`, `pwsh -Command`, `IMG -c '…'`) feed the
+  wrapper recursion. A `cd` affects only the segments after it. Explicit quick asks ("설명만",
+  "no edits") never inherit. `bash -n`, `cmake --build`, `ninja`, `meson test`, `bitbake` count.
+  `str.replace(…)` is not a write; a bare `raise SystemExit` is not an assertion.
+  `finish-the-work.sh` reads `last_assistant_message` from the Stop input before the transcript.
+
+- **Round-8 fixes (3-lens workflow review, every finding independently re-verified; 20 confirmed).**
+  - **Machine-injected prompts** (`source: system / loop_wakeup / schedule_wakeup / poll_event` —
+    task notifications, auto-continuation) continue the current task instead of resetting the
+    ledger and re-classifying the notification text. **Stop with `background_tasks` in flight**
+    does not block: the session is paused, not done.
+  - An approval that names the action ("ok fix it", "네, 수정해주세요") keeps a deep mode.
+  - `cd` state is positional: inline python / `node -e` / PowerShell `[IO.File]::Write*` writes
+    take the state where they ran; a relative `cd sub` / `cd -` keeps it. `tmp`/`temp` is scratch
+    only in an absolute path outside the project cwd (a project under `C:\temp` is gated again;
+    `src/tmp/x.py` is code). Deleting generated artifacts (`__pycache__`, `.pytest_cache`, `dist`,
+    `build`, `*.egg-info`, `.coverage` …) is not a change.
+  - Inline python writes: `open(os.path.join(…), "w")` counts; a literal under a variable root is
+    reported as `$ROOT/tail` and resolved through the line's own assignments (tempfile/TEMP roots
+    are scratch, unknown roots count); CSS-like literals are not paths.
+  - Quote handling: backslash escapes inside and outside double quotes, payloads unescaped as the
+    shell would (`ssh h "… sh -c '… \"…\" … pytest'"` is a verification), line continuations
+    joined; the inline-shell `-c` rule applies only under shells/docker/ssh; the wrapper scan and
+    the any-position runner match are linear (a 3,000-quote line took >3s).
+  - Runners: `for t in tests/test_*.py; do python "$t"`, `python manage.py test`,
+    `run_tests.sh`/`runtests.py`, `just|bazel|php artisan|hatch run test`, `pwsh … -File x.ps1`
+    past option values. Piped verdicts: go `--- FAIL`, `error TS…`, eslint `✖ N problems`, mypy
+    `Found N errors`, cargo `test result: FAILED` / `error[E…]`.
+  - A check after `git stash pop` in the same call is recorded; failure classes use the end of
+    the output, not the runner header; progress.json is also found under bash `$HOME`.
+
+### Changed
+
+- **Escalation step §4(2) targets the Agent tool's `effort: "max"`** (a skill instruction is the
+  explicit ask that parameter requires) instead of a Workflow that only exists after the user
+  opts into multi-agent orchestration. The CLAUDE.md block names the same path.
+- **Tests are pytest-collectable.** Each script-style suite exposes `test_script()`; the script
+  form stays canonical. `pytest tests` used to crash with `INTERNALERROR: SystemExit`.
+  `tests/conftest.py` restores `os.environ` per test, so one suite's `FABLIZE_HOLDOUT=1` no
+  longer leaks into the next under pytest.
+- New `tests/test_router.py` drives the bash hooks the way Claude Code does.
+
 ## [2.1.1+cakel.6] — 2026-10-23
 
 ### Fixed

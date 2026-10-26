@@ -25,3 +25,7 @@ assert kinds("ssh u@h 'ls'; cp .env .env.bak") == ["config"]
 assert kinds("cp .env .env.bak && ssh u@h 'uptime'") == ["config"]
 assert kinds("ssh u@h 'ls' && rm -f notes.md") == ["docs"]
 print("ok")
+
+
+def test_ssh_remote():
+    """pytest entry; the asserts above already ran at import."""
