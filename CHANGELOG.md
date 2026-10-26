@@ -35,7 +35,8 @@ surface a hook ERROR or silently do nothing, and make the one Fable-specific ski
   measured or not). The observation gate — which blocks Stop and was not mentioned at all —
   is described, the shipped recovery guard is no longer listed as "not shipped", the
   early-stop hook is marked opt-in, and a "Data it writes" section lists `~/.fablize/`
-  ledgers, `events.jsonl` and `./.fablize/`.
+  ledgers, `events.jsonl` and `./.fablize/`. The injected CLAUDE.md block's header no longer
+  says "Verified procedures only" (seen in the smoke test's installed block).
 - **Decision log.** `docs/DECISIONS.md` records the open decisions (README effect claims,
   blocking vs advisory gate, re-measurement, finish-the-work registration, goals.py
   command execution) and what to inspect when one is questioned. Router signals, Stop-gate

@@ -127,3 +127,5 @@ to see what the model was doing when the gate fired.
 - **Current state:** the first `/fablize` use without setup asks for a scope and then may
   ask about a GitHub star (SKILL.md), before the user's task.
 - **Risk:** interrupts an urgent task. **Revisit when:** a user complains, or upstream changes the flow.
+- **Observation (2026-10-26 smoke):** `/fablize:fablize <task>` on a fresh PC asked the scope,
+  ran setup, asked the star question, then did the task — two questions before any work.
