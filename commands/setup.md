@@ -20,7 +20,7 @@ If the user picks "Cancel", stop and do nothing.
 For "Local" or "Global", run setup:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/setup/setup.sh <local|global>
+bash "${CLAUDE_PLUGIN_ROOT}/setup/setup.sh" <local|global>
 ```
 
 `setup.sh` backs up CLAUDE.md, injects the `<!-- FABLIZE -->` block, and writes `~/.fablize/progress.json`. It never stars the repo by itself. Report the result briefly.
@@ -30,12 +30,12 @@ bash ${CLAUDE_PLUGIN_ROOT}/setup/setup.sh <local|global>
 Run:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/setup/setup.sh ask
+bash "${CLAUDE_PLUGIN_ROOT}/setup/setup.sh" ask
 ```
 
 If the output starts with `STAR_ASK`, immediately call the **AskUserQuestion** tool once, with the question and options phrased **in the user's language** (prefer the live conversation's language if it is evident; otherwise fall back to the language code after `STAR_ASK` — `ko`→Korean, `ja`→Japanese, `en`→English. Never default to one language blindly):
 - header: a short localized "GitHub Star" label
 - question: ask whether they'd like to give fablize a GitHub ⭐ to support it — note it is optional and every feature works either way
-- options: exactly two — (1) yes, star it → then run `bash ${CLAUDE_PLUGIN_ROOT}/setup/setup.sh star yes`; (2) no thanks → then run `bash ${CLAUDE_PLUGIN_ROOT}/setup/setup.sh star no`
+- options: exactly two — (1) yes, star it → then run `bash "${CLAUDE_PLUGIN_ROOT}/setup/setup.sh" star yes`; (2) no thanks → then run `bash "${CLAUDE_PLUGIN_ROOT}/setup/setup.sh" star no`
 
 If the output is empty, continue silently — the question was already asked before. Do not narrate beyond the question itself.

@@ -13,7 +13,11 @@
 # This script never stars the repo without an explicit "star yes" (issue #4).
 set -euo pipefail
 
-ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+# This script's own location, NOT $CLAUDE_PLUGIN_ROOT. A session opened before an
+# upgrade can carry the OLD root in that variable, so `bash <new>/setup/setup.sh`
+# would silently apply the old copy's assets — the downgrade the guard below
+# exists to stop, triggered by the very command the staleness notice prints.
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BLOCK_TPL="$ROOT/setup/fablize-block.md"
 REPO="cakel/fablize"
 REPO_URL="https://github.com/cakel/fablize"
@@ -21,12 +25,18 @@ CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 STATE_DIR="$HOME/.fablize"
 STAR_MARKER="$STATE_DIR/star.json"
 
+# Interpreter: hooks/py.sh is the single copy of the python3/python/py rule.
+pyrun() { bash "$ROOT/hooks/py.sh" "$@"; }
+# py.sh exits 0 silently when no interpreter exists (hooks fail open), so probe
+# for output rather than trusting the exit code.
+HAVE_PY=0; [ "$(pyrun -c 'print(1)' 2>/dev/null)" = 1 ] && HAVE_PY=1
+
 # --- detect a fallback UI language from past Claude session transcripts (best-effort) ---
 # Counts Hangul / Kana / Latin letters in HUMAN-typed user text only (skips tool results,
 # assistant turns and JSON structure, which are ASCII-heavy and would skew to English).
 detect_lang() {
-  command -v python3 >/dev/null 2>&1 || { echo en; return; }
-  python3 - "$CONFIG_DIR/projects" 2>/dev/null <<'PY' || echo en
+  [ "$HAVE_PY" = 1 ] || { echo en; return; }
+  pyrun - "$CONFIG_DIR/projects" 2>/dev/null <<'PY' || echo en
 import sys, os, glob, json
 base = sys.argv[1]
 try:
@@ -104,17 +114,22 @@ if [ "${1:-}" = "ask" ]; then
   exit 0
 fi
 
-command -v python3 >/dev/null 2>&1 || { echo "fablize: python3 is required."; exit 1; }
+[ "$HAVE_PY" = 1 ] || { echo "fablize: Python 3 is required (no python3, python or py on PATH)."; exit 1; }
 [ -f "$BLOCK_TPL" ] || { echo "fablize: block template not found ($BLOCK_TPL)"; exit 1; }
 
 scope="${1:-}"
 if [ -z "$scope" ]; then
+  # From a tool call stdin is not a terminal, so `read` fails and `set -e` exits
+  # with no message. Say what was missing instead.
+  [ -t 0 ] || { echo "fablize: no scope given and stdin is not a terminal — run: setup.sh local|global"; exit 1; }
   printf "fablize — inject the operating block into: [l]ocal (this project, recommended) / [g]lobal (all projects): "
   read -r ans
   case "$ans" in g*|G*) scope=global;; l*|L*|"") scope=local;; *) echo "cancelled"; exit 1;; esac
 fi
 case "$scope" in
-  global) CLAUDE_MD="$HOME/.claude/CLAUDE.md";;
+  # CONFIG_DIR, not ~/.claude: with CLAUDE_CONFIG_DIR set, Claude Code reads
+  # CLAUDE.md from there and a block written to ~/.claude is never seen.
+  global) CLAUDE_MD="$CONFIG_DIR/CLAUDE.md";;
   local)  CLAUDE_MD="$PWD/CLAUDE.md";;
   *) echo "fablize: scope must be global or local"; exit 1;;
 esac
@@ -134,13 +149,17 @@ esac
 # outside this repo's control — the harness expands the path, not us — so the
 # defence has to live here, in the thing that actually runs.
 if [ "${FABLIZE_ALLOW_DOWNGRADE:-}" != "1" ]; then
-  python3 - "$ROOT" "$STATE_DIR" <<'PY' || exit 1
+  pyrun - "$ROOT" "$STATE_DIR" <<'PY' || exit 1
 import json, os, re, sys
 
 def parts(value):
     # Every number, not the first three: `2.1.1+cakel.3` and `+cakel.4` must not
-    # compare equal. Same key as gate_prompt._version_key.
-    return tuple(int(n) for n in re.findall(r"\d+", str(value)))
+    # compare equal. Same key as gate_prompt._version_key, including the fork's
+    # pre-renumber releases 2.1.2 .. 2.1.8, which rank just below 2.1.1+cakel.1.
+    text = str(value)
+    if re.fullmatch(r"2\.1\.[2-8]", text):
+        return (2, 1, 1, 0, int(text.rsplit(".", 1)[1]))
+    return tuple(int(n) for n in re.findall(r"\d+", text))
 
 root, state_dir = sys.argv[1], sys.argv[2]
 try:
@@ -169,7 +188,7 @@ fi
 echo "fablize → $scope ($CLAUDE_MD)"
 
 mkdir -p "$(dirname "$CLAUDE_MD")"; touch "$CLAUDE_MD"
-ts=$(python3 -c "import time;print(int(time.time()))")
+ts=$(pyrun -c "import time;print(int(time.time()))")
 cp "$CLAUDE_MD" "$CLAUDE_MD.fablize-bak.$ts" && echo "  backup: $CLAUDE_MD.fablize-bak.$ts"
 
 # The block used to bake $ROOT — a VERSION-PINNED cache path like
@@ -179,13 +198,17 @@ cp "$CLAUDE_MD" "$CLAUDE_MD.fablize-bak.$ts" && echo "  backup: $CLAUDE_MD.fabli
 # location instead and point the block there, so the paths survive upgrades.
 # The hooks keep using ${CLAUDE_PLUGIN_ROOT}; only this text needed pinning.
 LIB_DIR="$STATE_DIR/lib"
-mkdir -p "$LIB_DIR/scripts" "$LIB_DIR/packs"
+mkdir -p "$LIB_DIR/scripts" "$LIB_DIR/packs" "$LIB_DIR/hooks"
 cp "$ROOT/scripts/goals.py" "$LIB_DIR/scripts/goals.py"
 cp "$ROOT"/packs/*.txt "$LIB_DIR/packs/"
+# py.sh: the block runs goals.py through it (no python3 on python.org Windows).
+# finish-the-work.sh: users register it as a Stop hook by hand, and it needs
+# py.sh beside it. Pointing them at $ROOT dangles after the next upgrade.
+cp "$ROOT/hooks/py.sh" "$ROOT/hooks/finish-the-work.sh" "$LIB_DIR/hooks/"
 echo "  ✓ assets: $LIB_DIR (refreshed from $ROOT)"
 
 # Substitute __PLUGIN_ROOT__ -> stable path, then inject idempotently (remove old markers, re-insert).
-python3 - "$CLAUDE_MD" "$BLOCK_TPL" "$LIB_DIR" <<'PY'
+pyrun - "$CLAUDE_MD" "$BLOCK_TPL" "$LIB_DIR" <<'PY'
 import sys, re, pathlib
 md, tpl, root = sys.argv[1], sys.argv[2], sys.argv[3]
 p = pathlib.Path(md)
@@ -198,7 +221,7 @@ PY
 
 # Record setup state so the skill won't auto-run setup again.
 mkdir -p "$STATE_DIR"
-python3 - "$scope" "$ts" "$ROOT" <<'PY'
+pyrun - "$scope" "$ts" "$ROOT" "$STATE_DIR" "$PWD" <<'PY'
 import json, sys, os
 # Read the version from the manifest instead of a literal: a hardcoded string
 # here silently disagrees with the installed plugin after every release, and the
@@ -209,15 +232,23 @@ try:
                               encoding="utf-8"))["version"]
 except Exception:
     version = "unknown"
-p = os.path.expanduser("~/.fablize/progress.json")
-json.dump({"setup_done": True, "scope": sys.argv[1], "version": version, "ts": int(sys.argv[2])},
-          open(p, "w"))
+# STATE_DIR from bash, not expanduser("~"): on Windows that reads USERPROFILE,
+# which need not agree with bash's $HOME.
+p = os.path.join(sys.argv[4], "progress.json")
+state = {"setup_done": True, "scope": sys.argv[1], "version": version, "ts": int(sys.argv[2])}
+if sys.argv[1] == "local":
+    # The staleness notice must re-run setup in THIS project, not wherever the
+    # user happens to be when it fires.
+    state["project"] = sys.argv[5]
+with open(p, "w", encoding="utf-8") as fh:
+    json.dump(state, fh)
 print(f"  ✓ state: version {version} recorded")
 PY
 
 echo "fablize setup complete ($scope) — applies from the next session."
 echo "  state: ~/.fablize/progress.json"
 echo "  Uninstall: bash $ROOT/setup/uninstall.sh $scope"
-echo "  Note: the router hook is auto-registered on plugin install. The early-stop hook (finish-the-work)"
-echo "        is often already registered globally — register $ROOT/hooks/finish-the-work.sh as a Stop hook"
-echo "        only if it is not (avoid duplicates)."
+echo "  Note: the router and gate hooks are auto-registered on plugin install. The early-stop hook"
+echo "        (finish-the-work) is not: register it as a Stop hook only if you want it and it is not"
+echo "        already registered (avoid duplicates): bash \"$LIB_DIR/hooks/finish-the-work.sh\""
+echo "        (that copy survives upgrades and is refreshed by every setup run)."

@@ -34,14 +34,22 @@ def main() -> int:
         if kinds:
             ledger["changed_files_seen"] = True
             add_unique(ledger, "change_kinds", kinds)
+            if set(kinds) - {"docs"}:
+                ledger["unverified_change"] = True
         if verification:
             ledger["verification_results"].append(verification)
+            # Same call order as the tool: `sed -i … && pytest` edits, then checks.
+            if verification.get("success") is not False:
+                ledger["unverified_change"] = False
             if command:
                 ledger["verification_commands"].append(verification["command"])
         if failure:
             ledger["failures"].append(failure)
 
     ledger = update_ledger(input_data, apply)
+    # The same script serves PostToolUse and PostToolUseFailure (a non-zero exit
+    # fires only the latter), and hookSpecificOutput must name the event it is for.
+    event = str(input_data.get("hook_event_name") or "PostToolUse")
 
     # silent-recovery guard: recover quietly from one-offs, but if the SAME class
     # of failure repeats (>=2), disclose it instead of retrying silently.
@@ -51,7 +59,7 @@ def main() -> int:
         emit_json(
             {
                 "hookSpecificOutput": {
-                    "hookEventName": "PostToolUse",
+                    "hookEventName": event,
                     "additionalContext": (
                         f"fablize: the same class of failure has repeated {count} times. "
                         "Stop retrying silently — report it briefly (what failed / recovery "
@@ -64,7 +72,7 @@ def main() -> int:
         emit_json(
             {
                 "hookSpecificOutput": {
-                    "hookEventName": "PostToolUse",
+                    "hookEventName": event,
                     "additionalContext": "fablize gate observed a tool failure. Do not report completion until it is fixed, isolated as a known baseline, or explicitly documented.",
                 }
             }

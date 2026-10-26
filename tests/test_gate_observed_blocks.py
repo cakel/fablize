@@ -199,3 +199,8 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+def test_script():
+    """pytest entry. The script form (`python3 tests/test_gate_observed_blocks.py`) stays canonical."""
+    assert main() == 0

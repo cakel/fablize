@@ -14,6 +14,8 @@ import hashlib
 import json
 import os
 import re
+import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -28,6 +30,11 @@ DEFAULT_LEDGER: dict[str, Any] = {
     "verification_results": [],
     "failures": [],
     "stop_blocks": 0,
+    # A non-docs change has happened since the latest non-failing verification.
+    "unverified_change": False,
+    # The staleness notice last shown in this session+cwd. Kept across prompts
+    # (gate_prompt resets only the per-turn keys) so the notice is said once.
+    "notice_shown": "",
     "last_updated": "",
 }
 
@@ -69,9 +76,13 @@ def data_root() -> Path:
 
 
 def ledger_key(input_data: dict[str, Any]) -> str:
-    cwd = input_data.get("cwd") or os.getcwd()
-    session_id = input_data.get("session_id") or "no-session"
-    raw = f"{session_id}|{cwd}"
+    # Session alone when there is one. `cwd` follows the Bash tool's working
+    # directory, so keying on it split one turn across ledgers: a `cd sub` after
+    # the deep prompt sent the Edit and the Stop to a fresh quick-mode ledger and
+    # the gate let an unverified change through. cwd only disambiguates the
+    # no-session case.
+    session_id = input_data.get("session_id")
+    raw = session_id if session_id else f"no-session|{input_data.get('cwd') or os.getcwd()}"
     return hashlib.sha256(raw.encode("utf-8", "replace")).hexdigest()[:24]
 
 
@@ -88,7 +99,7 @@ def load_ledger(input_data: dict[str, Any]) -> dict[str, Any]:
     if not path.exists():
         return default_ledger()
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(_retry(lambda: path.read_text(encoding="utf-8")))
     except (OSError, json.JSONDecodeError):
         data = default_ledger()
         # Fail toward keeping the gate armed. default_ledger()'s task_mode is
@@ -116,17 +127,76 @@ def save_ledger(input_data: dict[str, Any], ledger: dict[str, Any]) -> Path:
     path = ledger_path(input_data)
     path.parent.mkdir(parents=True, exist_ok=True)
     ledger["last_updated"] = utc_now()
-    tmp = path.with_suffix(".tmp")
+    # Per-process temp name: a shared `<key>.tmp` let two concurrent hooks
+    # (parallel tool calls) write and rename the same file, surfacing
+    # "Permission denied" / WinError 32 to the user.
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     tmp.write_text(json.dumps(ledger, indent=2, sort_keys=True), encoding="utf-8")
-    tmp.replace(path)
+    try:
+        # Windows refuses to replace a file another process has open; retry briefly.
+        _retry(lambda: tmp.replace(path))
+    except OSError:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
     return path
 
 
+def _retry(fn: Callable[[], Any], attempts: int = 50, delay: float = 0.02) -> Any:
+    for _ in range(attempts - 1):
+        try:
+            return fn()
+        except PermissionError:
+            time.sleep(delay)
+    return fn()
+
+
+@contextmanager
+def _locked(path: Path):
+    """Serialise load -> modify -> save across hook processes.
+
+    Without it concurrent PostToolUse hooks each loaded the same ledger and the
+    last writer won: 12 parallel calls kept 5-10 of 12 records, so a lost Edit
+    disarmed the gate and a lost failure hid it. An O_EXCL lock file works on
+    every OS with the stdlib. Never hangs a hook: a lock older than 10s is
+    treated as stale, and after 5s the update proceeds unlocked (fail open).
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock = path.with_name(path.name + ".lock")
+    deadline = time.monotonic() + 5
+    fd = None
+    while fd is None:
+        try:
+            fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except (FileExistsError, PermissionError):  # Windows: lock mid-delete
+            try:
+                if time.time() - lock.stat().st_mtime > 10:
+                    lock.unlink()
+                    continue
+            except OSError:
+                pass
+            if time.monotonic() > deadline:
+                break
+            time.sleep(0.01)
+    try:
+        yield
+    finally:
+        if fd is not None:
+            os.close(fd)
+            try:
+                lock.unlink()
+            except OSError:
+                pass
+
+
 def update_ledger(input_data: dict[str, Any], updater: Callable[[dict[str, Any]], None]) -> dict[str, Any]:
-    ledger = load_ledger(input_data)
-    updater(ledger)
-    trim_ledger(ledger)
-    save_ledger(input_data, ledger)
+    with _locked(ledger_path(input_data)):
+        ledger = load_ledger(input_data)
+        updater(ledger)
+        trim_ledger(ledger)
+        save_ledger(input_data, ledger)
     return ledger
 
 
@@ -160,6 +230,10 @@ def classify_path_kind(path_value: str) -> str:
     # verify_state.docs_only() short-circuit the deep gate for real code changes.
     if suffix in CODE_EXTS:
         return "code"
+    # Build/dependency manifests that happen to end in .txt are config, not docs:
+    # classifying CMakeLists.txt as docs let docs_only() disarm the deep gate.
+    if name == "cmakelists.txt" or (suffix == ".txt" and re.match(r"(?:requirements|constraints)", name)):
+        return "config"
     if suffix in DOC_EXTS or name in {"readme", "readme.md", "agents.md"}:
         return "docs"
     if suffix in CONFIG_EXTS or name.startswith(".env"):

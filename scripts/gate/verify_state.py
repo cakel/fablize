@@ -37,9 +37,20 @@ def has_successful_verification(ledger: dict[str, Any]) -> bool:
     not grounds to claim nothing was verified either. An observed failure still
     does not satisfy the gate — a turn whose only check returned False blocks,
     and the failure is disclosed separately through the ledger's `failures`.
+
+    The LATEST result decides, not any of them. With PostToolUseFailure wired,
+    a later failing run is finally visible; letting an earlier pass outvote it
+    meant "pytest passed, edit, pytest failed, stop" went through.
+
+    A non-docs change AFTER that result also voids it: "pytest passed, then
+    a - b became a + b, stop" went through on a check of code that no longer
+    exists. gate_post_tool sets `unverified_change` on every non-docs change and
+    clears it on every non-failing verification.
     """
     results = ledger.get("verification_results", [])
-    return any(result.get("success") is not False for result in results)
+    if ledger.get("unverified_change"):
+        return False
+    return bool(results) and results[-1].get("success") is not False
 
 
 def docs_only(ledger: dict[str, Any]) -> bool:
@@ -69,7 +80,13 @@ def should_block_stop(ledger: dict[str, Any]) -> tuple[bool, str]:
     return False, ""
 
 
+# Shown to the USER (Stop systemMessage): by now the model's turn is over, so an
+# instruction to "include it in the final report" would reach no one.
+GAP_WARNING = ("fablize gate: files changed this turn but no successful verification was "
+               "observed — treat the result as unverified.")
+
+
 def warning_after_max_blocks(ledger: dict[str, Any]) -> str:
     if int(ledger.get("stop_blocks") or 0) >= MAX_STOP_BLOCKS and not has_successful_verification(ledger):
-        return "fablize gate: verification evidence is still missing — include that gap in the final report."
+        return GAP_WARNING
     return ""

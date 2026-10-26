@@ -68,3 +68,17 @@ def append_event(event: dict[str, Any], path: Path | None = None) -> Path:
     with p.open("a", encoding="utf-8") as fh:
         fh.write(line + "\n")
     return p
+
+
+def log_event(session_id: str, event_type: str, payload: dict[str, Any]) -> None:
+    """Decision log for the live hooks (router signal, gate block, cap warning):
+    the record to look at when a gate decision is questioned later (see
+    docs/DECISIONS.md). Never raises into a hook; FABLIZE_EVENTS=0 turns it off.
+    Prompt text is never passed in — only labels and short matched terms."""
+    # ponytail: append-only, unrotated (~200 B/event); rotate if it ever matters.
+    if os.environ.get("FABLIZE_EVENTS") == "0":
+        return
+    try:
+        append_event(make_event(session_id, event_type, payload))
+    except Exception:
+        pass

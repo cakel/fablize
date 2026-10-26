@@ -19,7 +19,7 @@ _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE.parent / "scripts" / "gate"))
 sys.path.insert(0, str(_HERE.parent / "scripts" / "shadow"))
 
-from ledger import emit_json, load_ledger, read_stdin_json, save_ledger
+from ledger import emit_json, load_ledger, read_stdin_json, update_ledger
 from verify_state import should_block_stop, warning_after_max_blocks
 
 
@@ -49,13 +49,36 @@ def _log_holdout(input_data: dict, reason: str) -> None:
         pass
 
 
+def _log_decision(input_data: dict, ledger: dict, event: str) -> None:
+    """Out-of-band record of each block / cap warning (events.jsonl), so whether
+    the gate should stay blocking can be judged from data (docs/DECISIONS.md D2)."""
+    try:
+        from shadow_logger import log_event
+        log_event(input_data.get("session_id") or "", event, {
+            "mode": ledger.get("task_mode"),
+            "change_kinds": list(ledger.get("change_kinds") or []),
+            "stop_blocks": int(ledger.get("stop_blocks") or 0),
+            "verifications": len(ledger.get("verification_results") or []),
+            "unverified_change": bool(ledger.get("unverified_change")),
+        })
+    except Exception:
+        pass
+
+
 def main() -> int:
     input_data = read_stdin_json()
-    # Respect the loop guard so we never block twice in a row on the same stop.
-    if input_data.get("stop_hook_active") is True:
+    # No stop_hook_active early return. That flag is set after ANY Stop hook
+    # blocks — finish-the-work.sh included — so treating it as "this gate already
+    # blocked" let one promise-no-act reminder waive the evidence gate for the
+    # rest of the turn, made MAX_STOP_BLOCKS unreachable, and skipped the holdout
+    # check. The loop bound is the ledger's own stop_blocks counter, which
+    # gate_prompt resets per prompt and which caps at MAX_STOP_BLOCKS.
+    # Background work still in flight (a test run, a subagent): the session is
+    # paused, not done, and will be woken with the result. Blocking now told the
+    # model to "run the verification" it was already waiting on.
+    if input_data.get("background_tasks"):
         emit_json({})
         return 0
-
     ledger = load_ledger(input_data)
     block, reason = should_block_stop(ledger)
     if block:
@@ -65,21 +88,22 @@ def main() -> int:
             _log_holdout(input_data, reason)
             emit_json({})
             return 0
-        ledger["stop_blocks"] = int(ledger.get("stop_blocks") or 0) + 1
-        save_ledger(input_data, ledger)
+        # Under the ledger lock, so a PostToolUse finishing at the same moment
+        # cannot be overwritten by this increment.
+        def bump(current):
+            current["stop_blocks"] = int(current.get("stop_blocks") or 0) + 1
+        update_ledger(input_data, bump)
+        _log_decision(input_data, ledger, "stop_block")
         emit_json({"decision": "block", "reason": reason})
         return 0
 
+    # systemMessage only. Stop's additionalContext is "feedback delivered to the
+    # model; the conversation continues" (Claude Code's schema) — a third block
+    # by another name, past the cap. The model is done; the note is for the user.
     warning = warning_after_max_blocks(ledger)
     if warning:
-        emit_json(
-            {
-                "systemMessage": warning,
-                "hookSpecificOutput": {"hookEventName": "Stop", "additionalContext": warning},
-            }
-        )
-    else:
-        emit_json({})
+        _log_decision(input_data, ledger, "stop_cap_warning")
+    emit_json({"systemMessage": warning} if warning else {})
     return 0
 
 

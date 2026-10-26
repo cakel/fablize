@@ -83,7 +83,10 @@ for command, want in [
 
 # 4. mutation — same command-position rule
 for command, want in [
-    ("rm -rf dist", ["other"]),
+    ("rm -rf vendor", ["other"]),
+    # Generated artifacts are not source: deleting them after a check voided it.
+    ("rm -rf dist", []),
+    ("rm -rf .pytest_cache __pycache__", []),
     ("mkdir -p out", []),             # a directory is not a file: nothing to verify
     ("cp a b", ["other"]),
     ('grep -rn "rm -rf" docs/', []),
@@ -101,7 +104,7 @@ for command, want in [
     ("cp logo.png assets/logo.png", ["assets"]),
     ("cp -a --preserve=all src dst", ["other"]),   # flags skipped, operands unnamed
     ("cp a.md b.md 2>&1", ["docs"]),               # `2>&1` debris is not an operand
-    ("rm -rf dist && cp a.md b.md", ["docs", "other"]),
+    ("rm -rf vendor && cp a.md b.md", ["docs", "other"]),
     ("mkdir -p _ws && cp report.md _ws/report.md", ["docs"]),
     ("touch", ["other"]),                          # mutates something it cannot name
 ]:
@@ -111,7 +114,7 @@ for command, want in [
 # excluded it, so on Windows every change and every check made there was invisible.
 for command, want in [
     ("Copy-Item notes.md docs/notes.md", ["docs"]),
-    ("Remove-Item -Recurse dist", ["other"]),
+    ("Remove-Item -Recurse vendor", ["other"]),
     ("Get-Content notes.md", []),
 ]:
     check(
@@ -189,3 +192,8 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+def test_script():
+    """pytest entry. The script form (`python3 tests/test_gate_classification.py`) stays canonical."""
+    assert main() == 0

@@ -10,7 +10,9 @@ When debugging, follow this discipline:
 
 4. Trace the full causal chain. Do not stop at the first plausible cause: ask what allowed that cause to produce this symptom, and whether removing only the visible trigger would leave the defect latent. A fix that makes the test pass is not necessarily a fix that removes the defect.
 
-5. Verify before and after. Confirm the root cause with evidence before changing code. After the fix, demonstrate that the failure mode itself is gone — not merely that the triggering condition no longer occurs in this environment.
+5. Fix the defect where it lives, then find every other caller of the code you changed — or any sibling path built on the same wrong assumption — and check each one. Those siblings are the same defect, so fixing them is in scope; unrelated cleanup is not.
 
-6. In your report, state the hypotheses you rejected and the evidence that rejected them.
+6. Verify before and after. Confirm the root cause with evidence before changing code. After the fix, demonstrate that the failure mode itself is gone — not merely that the triggering condition no longer occurs in this environment. Where the project has tests, add a regression test that fails before the fix and passes after it, and show both runs.
+
+7. In your report, state the hypotheses you rejected and the evidence that rejected them.
 </investigation_protocol>

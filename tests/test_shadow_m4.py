@@ -86,3 +86,8 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+def test_script():
+    """pytest entry. The script form (`python3 tests/test_shadow_m4.py`) stays canonical."""
+    assert main() == 0

@@ -9,25 +9,38 @@ set -uo pipefail
 ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 PACKS="$ROOT/packs"
 
-prompt="$(python3 -c 'import sys,json
-try: print(json.load(sys.stdin).get("prompt",""))
-except Exception: pass' 2>/dev/null || true)"
-[ -z "${prompt:-}" ] && exit 0
-low="$(printf '%s' "$prompt" | tr '[:upper:]' '[:lower:]')"
+# Signals come from classify_task.py (DEBUG_RE / RENDER_RE), the same lists the
+# task-mode classifier uses: the router used to miss "근본 원인 찾아서 고쳐줘" /
+# "figure out why" while the classifier, with its own list, called them quick.
+# Each matched signal is also logged out-of-band (events.jsonl) so router hits can
+# be audited later; the prompt text itself is not logged.
+sigs="$(bash "$ROOT/hooks/py.sh" -c 'import sys,json
+sys.path.insert(0, sys.argv[1] + "/scripts/gate"); sys.path.insert(0, sys.argv[1] + "/scripts/shadow")
+try:
+    d = json.load(sys.stdin)
+    from classify_task import signals
+    found = signals(d.get("prompt") or "")
+except Exception:
+    sys.exit(0)
+for name, _ in found:
+    print(name)
+if found:
+    try:
+        from shadow_logger import log_event
+        log_event(d.get("session_id") or "", "router_signal", {"signals": [{"pack": n, "matched": m[:40]} for n, m in found]})
+    except Exception:
+        pass' "$ROOT" 2>/dev/null || true)"
+[ -z "${sigs:-}" ] && exit 0
 
 emit=""
 add() { emit="${emit:+$emit
 }$1"; }
 
-# Debugging / root-cause → investigation-protocol
-case "$low" in
-  *debug*|*bug*|*error*|*traceback*|*"stack trace"*|*crash*|*failing*|*"not working"*)
-    add "[fablize:investigation] Debugging/root-cause signal — follow $PACKS/investigation-protocol.txt: reproduce first, form 3+ competing hypotheses, gather evidence per hypothesis, trace the full causal chain, verify before/after, and report the hypotheses you rejected." ;;
+case "$sigs" in *investigation*)
+  add "[fablize:investigation] Debugging/root-cause signal — follow $PACKS/investigation-protocol.txt: reproduce first, form 3+ competing hypotheses, gather evidence per hypothesis, trace the full causal chain, check every sibling caller of the defective code, prove the fix with a test that failed before it, and report the hypotheses you rejected." ;;
 esac
-# Render/executable artifacts → verification-grounding
-case "$low" in
-  *html*|*svg*|*game*|*canvas*|*chart*|*render*|*website*|*webpage*)
-    add "[fablize:grounding] Render/executable artifact signal — follow $PACKS/verification-grounding-pack.txt grounding loop: run it in the real renderer, observe the actual output, fix what the observation reveals, then re-run. A static check is not observation." ;;
+case "$sigs" in *grounding*)
+  add "[fablize:grounding] Render/executable artifact signal — follow $PACKS/verification-grounding-pack.txt grounding loop: run it in the real renderer, observe the actual output, fix what the observation reveals, then re-run. A static check is not observation." ;;
 esac
 
 [ -n "$emit" ] && printf '%s\n' "$emit"

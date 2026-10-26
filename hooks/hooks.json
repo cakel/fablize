@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/router.sh",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/router.sh\"",
             "timeout": 30
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/gate_prompt.py\"",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/py.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/gate_prompt.py\"",
             "timeout": 30
           }
         ]
@@ -28,7 +28,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/gate_post_tool.py\"",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/py.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/gate_post_tool.py\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "^(Bash|PowerShell|Edit|Write|NotebookEdit|MultiEdit)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/py.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/gate_post_tool.py\"",
             "timeout": 30
           }
         ]
@@ -39,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/gate_stop.py\"",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/py.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/gate_stop.py\"",
             "timeout": 30
           }
         ]
