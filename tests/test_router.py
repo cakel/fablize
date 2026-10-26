@@ -108,6 +108,16 @@ check("classifier: root-cause asks are not quick",
       [classify_prompt(p_)[0] for p_ in ["근본 원인 찾아서 고쳐줘", "Find the root cause of the timeout",
                                          "빌드가 깨졌어", "간단히 이 버그 고쳐줘"]], ["normal"] * 4)
 check("classifier: explicit no-edit still wins", classify_prompt("설명만 해줘 이 버그")[0], "quick")
+from classify_task import forbids_verification  # noqa: E402
+check("forbid-verify: explicit prohibitions",
+      [forbids_verification(p_) for p_ in [
+          "calc.py 철저히 리팩터해줘. 테스트는 돌리지 마", "어떤 명령도 돌리지 말고 파일만 수정해",
+          "테스트 실행하지 말고 고쳐", "refactor it, don't run the tests", "do not run any commands",
+          "skip the tests and refactor"]], [True] * 6)
+check("forbid-verify: not a prohibition",
+      [forbids_verification(p_) for p_ in [
+          "테스트 돌려줘", "add tests because there are no tests", "fix the bug and run tests",
+          "명령 실행 결과를 설명해줘", "왜 테스트가 실패하지?", "refactor the auth module thoroughly"]], [False] * 6)
 hook("router.sh", {"prompt": "figure out why login fails", "session_id": "RT"})
 _ev = Path(_DATA) / "history" / "events.jsonl"
 check("router: matched signal logged without the prompt text",

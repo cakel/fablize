@@ -62,6 +62,11 @@ to see what the model was doing when the gate fired.
   the gate, which a model can satisfy with a trivial command).
 - **Options:** (a) keep blocking; (b) advisory only — `systemMessage`/`additionalContext`
   with no `decision: block`; (c) block only for `deep` mode, advise for `normal`.
+- **Partly decided 2026-10-26 (cakel.8):** the user's instruction outranks the gate. A
+  prompt that forbids running checks turns a would-be block into the user-facing
+  unverified warning (`stop_user_forbade`), and the block text no longer offers "say so" as
+  a way out. Blocking vs advisory in general is still open (deep already blocks, normal
+  already only advises — option (c) is the current behaviour).
 - **What to look at:** in `events.jsonl`, the share of `stop_block` events followed by a
   `stop_cap_warning` in the same session (the model never satisfied the gate — likely a
   false block or an unverifiable change), and `change_kinds` / `mode` of those events.
@@ -74,6 +79,9 @@ to see what the model was doing when the gate fired.
     on its own, and said behaviour was untested. `py_compile` counts as a verification,
     so no block. The user's "no tests" was respected and the gap disclosed — but a syntax
     check satisfied a deep gate for a behaviour change (the §3-2 ceremonial-check risk).
+  - Same smoke, "어떤 명령도 돌리지 말고 파일만 수정해" (deep): blocked twice, then the cap
+    warning. The model refused both times citing the user, as the block text allowed ("say so"),
+    yet the gate kept blocking — two wasted turns. Fixed in cakel.8 (above).
   - Same smoke: Opus ended checks with `; echo "exit=$?"`, which exits 0 whatever the test
     did; an echoed `exit=1` was read as "unknown" and would have passed the gate. Fixed
     (echoed nonzero status = failure).

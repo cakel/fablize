@@ -52,6 +52,27 @@ NORMAL_RE = re.compile(
 )
 
 
+# The user forbids running checks this turn ("테스트는 돌리지 마", "don't run any
+# commands, just edit the file"). The Stop gate then warns instead of blocking:
+# a block told the model to run what the user had just forbidden, and in the
+# 2026-10-26 smoke test cost two wasted turns on a model that obeyed the user.
+# Imperative only: "검증하지 않았다" is a report, not an instruction. Build tools are
+# left out — "do NOT run build tools (merge.py …)" still allows read-only checks.
+FORBID_VERIFY_RE = re.compile(
+    r"(?i)\b(?:don'?t|do not|never|without)\s+(?:run(?:ning)?|execut\w*)\s+(?:the\s+|any\s+)?"
+    r"(?:tests?|commands?|anything|checks?)\b|\bskip\s+(?:the\s+|running\s+)?tests?\b|"
+    r"\bedit\s+(?:the\s+)?files?\s+only\b|"
+    r"(?:테스트|명령|커맨드)[^\n.?!]{0,15}?(?:돌리지|실행하지|하지|돌리면\s*안)\s*(?:마(?![가-힣])|마세요|말고|말\s*것|말아|않고)|"
+    r"(?:아무|어떤)\s*(?:명령|커맨드)도|아무\s*것도\s*(?:실행|돌리)|파일만\s*(?:수정|고쳐|바꿔|편집)"
+)
+# A follow-up that asks for a check ends the prohibition instead of inheriting it.
+_ASKS_CHECK_RE = re.compile(r"(?i)\b(?:test|verify|check|run)\w*|테스트|검증|확인|돌려|실행")
+
+
+def forbids_verification(prompt: str) -> bool:
+    return bool(FORBID_VERIFY_RE.search(prompt or ""))
+
+
 def classify_prompt(prompt: str) -> tuple[str, list[str]]:
     text = prompt or ""
     lowered = text.lower()
@@ -94,10 +115,13 @@ def signals(prompt: str) -> list[tuple[str, str]]:
     return out
 
 
-def context_for_mode(mode: str, risk_flags: list[str]) -> str:
+def context_for_mode(mode: str, risk_flags: list[str], verify_forbidden: bool = False) -> str:
     lines = [f"fablize gate — task mode: {mode}."]
     if risk_flags:
         lines.append("Risk flags: " + ", ".join(risk_flags) + ".")
+    if verify_forbidden:
+        lines.append("The user said not to run tests/commands this turn: do not run them; "
+                     "say plainly that the change is unverified. The gate will not block on it.")
     if mode == "quick":
         lines.append("Keep it concise; no forced verification.")
     elif mode == "normal":

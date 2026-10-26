@@ -32,6 +32,7 @@ DEFAULT_LEDGER: dict[str, Any] = {
     "stop_blocks": 0,
     # A non-docs change has happened since the latest non-failing verification.
     "unverified_change": False,
+    "verify_forbidden": False,
     # The staleness notice last shown in this session+cwd. Kept across prompts
     # (gate_prompt resets only the per-turn keys) so the notice is said once.
     "notice_shown": "",

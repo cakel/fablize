@@ -183,6 +183,34 @@ for p in ["Yes, go ahead and implement it", "네, 수정해주세요", "ok fix i
           "task mode: deep" in out.get("hookSpecificOutput", {}).get("additionalContext", ""))
 
 
+# --- P. the user forbids running checks: warn the user, never block (D2, cakel.8) ---
+EDIT = {"tool_name": "Edit", "tool_input": {"file_path": "src/x.py", "old_string": "a", "new_string": "b"}}
+for p_ in ["calc.py 철저히 리팩터해줘. 테스트는 돌리지 마",
+           "refactor the auth module thoroughly, don't run any commands, just edit the file"]:
+    dd = tempfile.mkdtemp(prefix="fz_")
+    ctx = as_json(run("gate_prompt.py", {"prompt": p_, "session_id": "P", "cwd": "/w"}, dd))
+    check(f"forbidden turn: the model is told not to run checks: {p_[:30]}",
+          "user said not to run tests" in ctx.get("hookSpecificOutput", {}).get("additionalContext", ""))
+    run("gate_post_tool.py", dict(EDIT, session_id="P", cwd="/w"), dd)
+    out = as_json(run("gate_stop.py", {"session_id": "P", "cwd": "/w"}, dd))
+    check(f"forbidden turn: no block, unverified warning to the user: {p_[:30]}",
+          out.get("decision") != "block" and "unverified" in out.get("systemMessage", ""))
+    ev = os.path.join(dd, "history", "events.jsonl")
+    check(f"forbidden turn: logged as stop_user_forbade: {p_[:30]}",
+          os.path.exists(ev) and "stop_user_forbade" in open(ev, encoding="utf-8").read())
+dd = tempfile.mkdtemp(prefix="fz_")
+run("gate_prompt.py", {"prompt": "calc.py 철저히 리팩터해줘. 테스트는 돌리지 마", "session_id": "Q", "cwd": "/w"}, dd)
+run("gate_prompt.py", {"prompt": "응 계속", "session_id": "Q", "cwd": "/w"}, dd)
+run("gate_post_tool.py", dict(EDIT, session_id="Q", cwd="/w"), dd)
+check("a bare follow-up keeps the prohibition", not blocks(run("gate_stop.py", {"session_id": "Q", "cwd": "/w"}, dd)))
+dd = tempfile.mkdtemp(prefix="fz_")
+run("gate_prompt.py", {"prompt": "calc.py 철저히 리팩터해줘. 테스트는 돌리지 마", "session_id": "R", "cwd": "/w"}, dd)
+run("gate_prompt.py", {"prompt": "refactor it thoroughly again and run the tests", "session_id": "R", "cwd": "/w"}, dd)
+run("gate_post_tool.py", dict(EDIT, session_id="R", cwd="/w"), dd)
+check("a follow-up that asks for checks lifts it (deep blocks again)",
+      blocks(run("gate_stop.py", {"session_id": "R", "cwd": "/w"}, dd)))
+
+
 def main():
     print("=" * 80)
     print("fablize observation gate — robustness / safety checks")

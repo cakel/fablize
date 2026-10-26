@@ -3,6 +3,24 @@
 All notable changes to fablize are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [SemVer](https://semver.org/).
 
+## [2.1.1+cakel.8] — 2026-10-26
+
+### Changed
+
+- **The Stop gate yields to an explicit "don't run it".** When the prompt forbids running
+  checks ("테스트는 돌리지 마", "어떤 명령도 돌리지 말고 파일만 수정해", "don't run the tests",
+  "do not run any commands"), a deep turn that changed files is not blocked: the model is
+  told not to run anything and to say the change is unverified, and the user gets the
+  unverified warning (`stop_user_forbade` in `events.jsonl`). A bare follow-up ("응 계속")
+  keeps the prohibition; one that asks for a check lifts it. In the cakel.7 smoke test the
+  gate blocked twice a model that was obeying the user — on a weaker model, pressure to run
+  what the user forbade. (docs/DECISIONS.md D2)
+  Imperatives only ("검증하지 않았다" is a report) and not build tools ("do NOT run build
+  tools" still allows read-only checks): 0 of 5,721 real prompts flagged.
+- **Block reason no longer offers a way out it does not honour.** "…or, if none applies,
+  say so" never released the gate; the text now says the reminder repeats at most twice and
+  then ends the turn with an unverified warning.
+
 ## [2.1.1+cakel.7] — 2026-10-23
 
 Review pass for running fablize under Sonnet/Opus on a Windows host: close the paths that

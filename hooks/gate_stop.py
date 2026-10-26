@@ -20,7 +20,7 @@ sys.path.insert(0, str(_HERE.parent / "scripts" / "gate"))
 sys.path.insert(0, str(_HERE.parent / "scripts" / "shadow"))
 
 from ledger import emit_json, load_ledger, read_stdin_json, update_ledger
-from verify_state import should_block_stop, warning_after_max_blocks
+from verify_state import MAX_STOP_BLOCKS, should_block_stop, warning_after_max_blocks
 
 
 def _holdout_suppresses(input_data: dict) -> bool:
@@ -102,7 +102,8 @@ def main() -> int:
     # by another name, past the cap. The model is done; the note is for the user.
     warning = warning_after_max_blocks(ledger)
     if warning:
-        _log_decision(input_data, ledger, "stop_cap_warning")
+        capped = int(ledger.get("stop_blocks") or 0) >= MAX_STOP_BLOCKS
+        _log_decision(input_data, ledger, "stop_cap_warning" if capped else "stop_user_forbade")
     emit_json({"systemMessage": warning} if warning else {})
     return 0
 
