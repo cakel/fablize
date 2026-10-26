@@ -248,7 +248,4 @@ PY
 echo "fablize setup complete ($scope) — applies from the next session."
 echo "  state: ~/.fablize/progress.json"
 echo "  Uninstall: bash $ROOT/setup/uninstall.sh $scope"
-echo "  Note: the router and gate hooks are auto-registered on plugin install. The early-stop hook"
-echo "        (finish-the-work) is not: register it as a Stop hook only if you want it and it is not"
-echo "        already registered (avoid duplicates): bash \"$LIB_DIR/hooks/finish-the-work.sh\""
-echo "        (that copy survives upgrades and is refreshed by every setup run)."
+echo "  Hooks: auto-registered on plugin install. Nothing else to do."

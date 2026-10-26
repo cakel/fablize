@@ -103,7 +103,7 @@ Everything stays on your machine.
 ## Setup details
 
 - **Always-on rules:** `setup/setup.sh local|global` writes a short rules block into `CLAUDE.md` (with a backup) and copies the files it points at to `~/.fablize/lib`. Re-run it after a plugin update; fablize tells you once per session when it's out of date.
-- **Early-stop hook:** setup prints how to register `~/.fablize/lib/hooks/finish-the-work.sh` as a `Stop` hook in your settings. It's off by default (see [D4](DECISIONS.md)).
+- **Early-stop hook:** off by default. To opt in, register `~/.fablize/lib/hooks/finish-the-work.sh` (setup keeps this copy current) as a `Stop` hook in your settings (see [D4](DECISIONS.md)).
 - **Windows:** hooks run through Git Bash; `hooks/py.sh` finds `python3`, `python` or `py`. If no Python is found, the hooks do nothing.
 - **Uninstall:** `setup/uninstall.sh local|global` removes the block. The hooks stay until `/plugin uninstall fablize@cakel`.
 

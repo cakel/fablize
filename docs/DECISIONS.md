@@ -115,8 +115,8 @@ to see what the model was doing when the gate fired.
 
 - **Opened:** 2026-10-26.
 - **Current state:** shipped and copied to `~/.fablize/lib/hooks/`, **not** registered in
-  `hooks/hooks.json`; `setup.sh` prints how to register it by hand. README describes it
-  as part of the package.
+  `hooks/hooks.json`; registered by hand per `docs/GUIDE.md`; `setup.sh` no longer mentions it. README does not
+  mention it; `docs/GUIDE.md` lists it as opt-in.
 - **Known risk:** it blocks on a promise phrase at the end of a message. It blocked
   "…once you give the go-ahead", pushing a destructive step ahead of consent; that and
   similar approval phrasings (EN/KO) now pass (cakel.7), but the pattern list is open-ended.
