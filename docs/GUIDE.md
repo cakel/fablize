@@ -25,12 +25,12 @@ So fablize packages the way of working. It doesn't raise the model's ceiling; it
 
 ## Models used for this fork
 
-The cakel.7–8 releases were built in Claude Code with two models:
+The cakel.7–8 releases were built in Claude Code with these models:
 
 | Model | Used for |
 |---|---|
-| **Fable 5.1** | code review rounds and fixes |
-| **Opus 5.5** | code review rounds and fixes, the skill audit, the decision log, the docs |
+| **Sonnet 5.5, Opus 5.5** | code review rounds and fixes |
+| **Opus 5.5** | the skill audit, the decision log, the docs |
 | **Sonnet 5.5, Opus 5.5** | the 2026-10-24 with/without-skill check (6 runs, hidden tests) |
 | **Opus 5.5** | the real-session smoke test on a clean Windows PC (Claude Code 2.1.310, steps 0–9 pass) |
 

@@ -64,7 +64,7 @@ You can also start it on purpose with `/fablize` or phrases like "see it through
 
 > This is a fork of [`fivetaku/fablize`](https://github.com/fivetaku/fablize) (upstream 2.1.1) with its own fixes; versions read `2.1.1+cakel.<n>`.
 >
-> The cakel.7–8 work (reviews, fixes, tests, docs) was done in Claude Code with **Fable 5.1** and **Opus 5.5** — see [Models used](docs/GUIDE.md#models-used-for-this-fork).
+> The cakel.7–8 work (reviews, fixes, tests, docs) was done in Claude Code with **Sonnet 5.5** and **Opus 5.5** — see [Models used](docs/GUIDE.md#models-used-for-this-fork).
 
 ## License
 
