@@ -20,6 +20,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _bash import BASH  # noqa: E402
+
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "hooks"))
 
@@ -65,7 +68,7 @@ def run_setup(root: Path, home: Path) -> subprocess.CompletedProcess:
     # encoding= explicitly: the console codepage (cp949 here) cannot decode the
     # script's ✓ output, and the default would raise instead of running.
     return subprocess.run(
-        ["bash", str(root / "setup" / "setup.sh"), "global"],
+        [BASH, str(root / "setup" / "setup.sh"), "global"],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
         env=env, cwd=str(root), timeout=120,
     )
@@ -164,7 +167,7 @@ with tempfile.TemporaryDirectory() as tmp:
     check("same version still allowed", run_setup(root2, home).returncode, 0)
     env_down = dict(os.environ, FABLIZE_ALLOW_DOWNGRADE="1")
     proc5 = subprocess.run(
-        ["bash", str(root / "setup" / "setup.sh"), "global"],
+        [BASH, str(root / "setup" / "setup.sh"), "global"],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
         env={**env_down, "HOME": str(home), "USERPROFILE": str(home),
              "CLAUDE_PLUGIN_ROOT": str(root), "CLAUDE_CONFIG_DIR": str(home / ".claude")},
@@ -194,7 +197,7 @@ with tempfile.TemporaryDirectory() as tmp:
     home_l = tmp / "home_l"
     (home_l / ".claude").mkdir(parents=True)
     proc_l = subprocess.run(
-        ["bash", str(root2 / "setup" / "setup.sh"), "local"],
+        [BASH, str(root2 / "setup" / "setup.sh"), "local"],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
         env={**os.environ, "HOME": str(home_l), "USERPROFILE": str(home_l),
              "CLAUDE_CONFIG_DIR": str(home_l / ".claude")},
@@ -224,7 +227,7 @@ with tempfile.TemporaryDirectory() as tmp:
     home_c = tmp / "home_c"
     (home_c / "cfg").mkdir(parents=True)
     proc_c = subprocess.run(
-        ["bash", str(root2 / "setup" / "setup.sh"), "global"],
+        [BASH, str(root2 / "setup" / "setup.sh"), "global"],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
         env={**os.environ, "HOME": str(home_c), "USERPROFILE": str(home_c),
              "CLAUDE_PLUGIN_ROOT": str(root2), "CLAUDE_CONFIG_DIR": str(home_c / "cfg")},
@@ -238,7 +241,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # From a tool call stdin is not a terminal: no scope must be a clear error, not
     # a silent exit 1 from `read` under set -e.
     proc_n = subprocess.run(
-        ["bash", str(root2 / "setup" / "setup.sh")],
+        [BASH, str(root2 / "setup" / "setup.sh")],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
         stdin=subprocess.DEVNULL,
         env={**os.environ, "HOME": str(home_c), "USERPROFILE": str(home_c),
@@ -263,7 +266,7 @@ with tempfile.TemporaryDirectory() as tmp:
     (home_e / ".claude").mkdir(parents=True)
     env_e = {k: v for k, v in os.environ.items() if k not in ("PYTHONIOENCODING", "PYTHONUTF8")}
     env_e.update(HOME=str(home_e), USERPROFILE=str(home_e), CLAUDE_CONFIG_DIR=str(home_e / ".claude"))
-    proc_e = subprocess.run(["bash", str(root2 / "setup" / "setup.sh"), "global"],
+    proc_e = subprocess.run([BASH, str(root2 / "setup" / "setup.sh"), "global"],
                             capture_output=True, text=True, encoding="utf-8", errors="replace",
                             env=env_e, cwd=str(root2), timeout=120)
     check("setup without PYTHONIOENCODING exits 0", proc_e.returncode, 0)
@@ -275,7 +278,7 @@ with tempfile.TemporaryDirectory() as tmp:
     (home_u / ".fablize").mkdir(parents=True)
     (home_u / ".fablize" / "progress.json").write_text(
         json.dumps({"version": "0.0.1", "scope": "global", "setup_done": True}), encoding="utf-8")
-    subprocess.run(["bash", str(REPO / "setup" / "uninstall.sh"), "global"], capture_output=True,
+    subprocess.run([BASH, str(REPO / "setup" / "uninstall.sh"), "global"], capture_output=True,
                    env={**os.environ, "HOME": str(home_u), "USERPROFILE": str(home_u),
                         "CLAUDE_CONFIG_DIR": str(home_u / ".claude")}, timeout=120)
     rec_u = json.loads((home_u / ".fablize" / "progress.json").read_text(encoding="utf-8"))

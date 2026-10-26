@@ -15,6 +15,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _bash import BASH  # noqa: E402
+
 HOOKS = Path(__file__).resolve().parent.parent / "hooks"
 CHECKS = []
 
@@ -29,7 +32,7 @@ _DATA = tempfile.mkdtemp(prefix="fz_rt_")
 def hook(name, payload):
     # FABLIZE_DATA isolated: router.sh logs matched signals to events.jsonl.
     env = dict(os.environ, CLAUDE_PLUGIN_ROOT=str(HOOKS.parent), FABLIZE_DATA=_DATA)
-    p = subprocess.run(["bash", str(HOOKS / name)], input=json.dumps(payload),
+    p = subprocess.run([BASH, str(HOOKS / name)], input=json.dumps(payload),
                        capture_output=True, text=True, encoding="utf-8", errors="replace",
                        env=env, timeout=60)
     return p.returncode, p.stdout
@@ -40,7 +43,7 @@ def route(prompt):
 
 
 # --- py.sh: runs a script with whatever interpreter exists; stdin passes through ---
-out = subprocess.run(["bash", str(HOOKS / "py.sh"), "-c", "import sys; print(sys.stdin.read().strip())"],
+out = subprocess.run([BASH, str(HOOKS / "py.sh"), "-c", "import sys; print(sys.stdin.read().strip())"],
                      input="ping", capture_output=True, text=True).stdout.strip()
 check("py.sh runs python and forwards stdin", out, "ping")
 
@@ -53,15 +56,16 @@ with tempfile.TemporaryDirectory() as td:
     wa.mkdir(); fb.mkdir()
 
     def wrapper(path, body):
-        path.write_text("#!/bin/bash\n" + body + "\n", encoding="utf-8", newline="\n")
+        path.write_bytes(("#!/bin/bash\n" + body + "\n").encode("utf-8"))  # LF; newline= is 3.10+
         path.chmod(0o755)
 
-    def py_sh(path_dirs):
-        env = dict(os.environ, PATH=":".join(path_dirs + ["/usr/bin", "/bin"]))
-        return subprocess.run(["bash", str(HOOKS / "py.sh"), "-c", "print(42)"],
+    def py_sh(path_dirs, system_dirs=True):
+        # A Linux host has python3 in /usr/bin, so "no interpreter" must leave it out.
+        env = dict(os.environ, PATH=":".join(path_dirs + (["/usr/bin", "/bin"] if system_dirs else [])))
+        return subprocess.run([BASH, str(HOOKS / "py.sh"), "-c", "print(42)"],
                               capture_output=True, text=True, env=env)
 
-    to_posix = lambda p: subprocess.run(["bash", "-c", f'cd "{p.as_posix()}" && pwd'],
+    to_posix = lambda p: subprocess.run([BASH, "-c", f'cd "{p.as_posix()}" && pwd'],
                                         capture_output=True, text=True).stdout.strip()
     wrapper(fb / "python", f'echo FALLBACK >&2; exec "{real_py}" "$@"')
     wrapper(wa / "python3", 'echo "Python was not found" >&2; exit 9009')
@@ -70,7 +74,7 @@ with tempfile.TemporaryDirectory() as td:
     wrapper(wa / "python3", f'echo ALIAS >&2; exec "{real_py}" "$@"')
     p = py_sh([to_posix(wa), to_posix(fb)])
     check("py.sh: real Store alias is used", (p.stdout.strip(), "ALIAS" in p.stderr), ("42", True))
-    p = py_sh([to_posix(Path(td) / "empty")])
+    p = py_sh([to_posix(Path(td) / "empty")], system_dirs=False)
     check("py.sh: no interpreter -> silent exit 0", (p.returncode, p.stdout), (0, ""))
 
 # --- py.sh forces UTF-8: with the host's encoding vars stripped, Windows Python
@@ -78,7 +82,7 @@ with tempfile.TemporaryDirectory() as td:
 env_nu = {k: v for k, v in os.environ.items() if k not in ("PYTHONIOENCODING", "PYTHONUTF8")}
 with tempfile.TemporaryDirectory() as dd:
     env_nu["FABLIZE_DATA"] = dd
-    p = subprocess.run(["bash", str(HOOKS / "py.sh"), str(HOOKS / "gate_prompt.py")],
+    p = subprocess.run([BASH, str(HOOKS / "py.sh"), str(HOOKS / "gate_prompt.py")],
                        input=json.dumps({"prompt": "배포 스크립트 끝까지 수정해줘 \u201cquoted\u201d",
                                          "session_id": "u", "cwd": "/w"}, ensure_ascii=False).encode("utf-8"),
                        capture_output=True, env=env_nu, timeout=60)
@@ -282,7 +286,7 @@ with tempfile.TemporaryDirectory() as td:
         env.update(HOME=str(home), USERPROFILE=str(home), TMPDIR=str(tmpd), TEMP=str(tmpd), TMP=str(tmpd))
         if cfg_env:
             env["CLAUDE_CONFIG_DIR"] = str(td / "cfg")
-        p = subprocess.run(["bash", str(HOOKS / "finish-the-work.sh")],
+        p = subprocess.run([BASH, str(HOOKS / "finish-the-work.sh")],
                            input=json.dumps({"transcript_path": str(t), "stop_hook_active": False}),
                            capture_output=True, text=True, env=env, timeout=60)
         return p.returncode, '"block"' in p.stdout

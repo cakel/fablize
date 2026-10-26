@@ -3,6 +3,7 @@ English | [한국어](README.ko.md)
 # fablize — run Opus like Fable
 
 [![GitHub stars](https://img.shields.io/github/stars/cakel/fablize?style=flat&color=yellow)](https://github.com/cakel/fablize/stargazers)
+[![tests](https://github.com/cakel/fablize/actions/workflows/tests.yml/badge.svg)](https://github.com/cakel/fablize/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 A Claude Code plugin that gives Claude good work habits: run what you build, check before you say "done", and track down a bug step by step instead of guessing.
