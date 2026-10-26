@@ -168,6 +168,10 @@ FAILURE_RE = re.compile(
     r"traceback \(most recent call last\))"
 )
 SUCCESS_RE = re.compile(r"(?i)\b(passed|success|succeeded|0 failed|build completed|done|valid)\b")
+# An exit status the command echoes itself (`echo "exit=$?"`, `echo $LASTEXITCODE`).
+_ECHO_STATUS_CMD_RE = re.compile(r"(?i)\b(?:echo|printf|write-host|write-output)\b[^;&|\n]*(?:\$\?|\$\{\?\}|\$LASTEXITCODE)")
+# No leading \b on `exit`: `cat f && …; echo "exit=$?"` prints "…return a+bexit=0".
+_ECHO_STATUS_OUT_RE = re.compile(r"(?i)(?:exit(?:[ _]?code)?|\brc|\bstatus|return code)\s*[=:]\s*(-?\d+)\b|(?:^|\s)(-?\d+)\s*$")
 
 _HEREDOC_OPEN_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_]\w*)\1")
 
@@ -443,6 +447,13 @@ def exit_success(input_data: dict[str, Any], text: str) -> bool | None:
     if not is_verification_command(command_from_input(input_data)):
         return None
     tail = status_text(input_data)
+    # `pytest; echo "exit=$?"` exits 0 whatever pytest did, so the status is only
+    # in the echoed number. A nonzero one is a failure; it was read as "unknown",
+    # which the Stop gate counts as not-failed (seen in a live Opus session).
+    if _ECHO_STATUS_CMD_RE.search(command_from_input(input_data)):
+        codes = [a or b for a, b in _ECHO_STATUS_OUT_RE.findall(tail)]
+        if codes and int(codes[-1]) != 0:
+            return False
     # A test-runner verdict ("1 failed, 990 passed", "no tests ran") always wins.
     if VERDICT_FAILURE_RE.search(tail) or VERDICT_FAILURE_CS_RE.search(tail):
         return False

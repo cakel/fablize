@@ -68,6 +68,15 @@ to see what the model was doing when the gate fired.
   Read the transcript for a sample: was the block right?
 - **Revisit when:** a user reports a block loop or a block on a turn that did verify, or
   cap warnings exceed roughly a third of blocks over a few dozen sessions.
+- **Observations:**
+  - 2026-10-26 smoke (Opus 5.5, Windows, clean PC): "calc.py 철저히 리팩터해줘. 테스트는
+    돌리지 마" → deep; the model edited, ran `python -m py_compile calc.py && echo ok`
+    on its own, and said behaviour was untested. `py_compile` counts as a verification,
+    so no block. The user's "no tests" was respected and the gap disclosed — but a syntax
+    check satisfied a deep gate for a behaviour change (the §3-2 ceremonial-check risk).
+  - Same smoke: Opus ended checks with `; echo "exit=$?"`, which exits 0 whatever the test
+    did; an echoed `exit=1` was read as "unknown" and would have passed the gate. Fixed
+    (echoed nonzero status = failure).
 
 ## D3. Re-measure effect with harder tasks and a clean baseline
 

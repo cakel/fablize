@@ -322,6 +322,20 @@ check("a project under C:/temp is not scratch",
        P8("cat > src/tmp/helper.py <<'EOF'\nx\nEOF")), (["code"], ["code"]))
 
 
+# --- smoke 2026-10-26: an echoed exit status is the verdict when `; echo $?` masks it ---
+def _ES(cmd, out):
+    return (verification_record({"tool_name": "Bash", "tool_input": {"command": cmd},
+                                 "tool_response": {"stdout": out}}) or {}).get("success", "MISSING")
+check("echoed nonzero status after a test is a failure",
+      (_ES('sed -i s/a/b/ calc.py && python test_calc.py; echo "exit=$?"', "x\nexit=1"),
+       _ES("pytest -q; echo $?", "....\n1"),
+       _ES('python test_calc.py; echo "EXIT_CODE: $?"', "EXIT_CODE: 2")), (False, False, False))
+check("echoed zero status is not a failure (glued to file text too)",
+      (_ES('cat calc.py && python test_calc.py; echo "exit=$?"', "def add(a,b):\n    return a+bexit=0"),
+       _ES("pytest -q; echo $?", "4 passed\n0")), (None, True))
+check("'exit=1' in output without an echoed $? is not a status", _ES("pytest -q", "5 passed, exit=1 in log"), True)
+
+
 def main():
     bad = 0
     for label, got, want in CHECKS:

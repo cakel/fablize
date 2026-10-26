@@ -26,6 +26,10 @@ surface a hook ERROR or silently do nothing, and make the one Fable-specific ski
     "trust me"` used to complete the plan.
   - **Investigation pack** adds checking every sibling caller of the changed code (in
     scope: same defect) and a regression test that fails before the fix.
+- **An echoed exit status is the verdict.** `pytest; echo "exit=$?"` exits 0 whatever
+  pytest did; an echoed nonzero status (`exit=1`, `EXIT_CODE: 2`, a bare `1`) is now a
+  failure instead of "unknown", which the Stop gate counted as not-failed. Found in the
+  live smoke test.
 - **README claims match the evidence.** "Only procedures whose effect was verified" and
   "What's included (verified only)" are replaced by a per-component table (how it runs,
   measured or not). The observation gate — which blocks Stop and was not mentioned at all —
