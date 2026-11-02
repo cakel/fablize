@@ -11,6 +11,8 @@ description: A harness that makes Opus (or any Claude model) behave like Fable �
 
 ## 0. First run — set up automatically (once)
 
+Claude Code replaces the plugin-root variable in this file with a real path. If the command lines in sections 1–3 below still start their paths with a dollar sign and a brace (the variable was not replaced), this is not Claude Code: skip this section (onboarding is Claude Code-only), take that variable to mean the directory two levels above this SKILL.md, and where there is no bash run `bash "<root>/hooks/py.sh" "<script>" …` as `python "<script>" …` (or `py` / `python3`). On Kiro CLI, `python <root>/setup/kiro.py global` installs the hooks and a ready-made copy of this skill (docs/GUIDE.md, "Kiro CLI").
+
 Before doing the requested task, check whether fablize has been onboarded on this machine. Every command in this file is a bash line: run it with the Bash tool, even on a host whose primary shell is PowerShell. Python always goes through `hooks/py.sh` (python3/python/py), never a bare `python3`, which python.org Windows installs do not have.
 
 ```bash
@@ -38,8 +40,9 @@ This means the user can just run `/fablize` (or trigger it) without running setu
 Decompose into sequential stories and complete one at a time, producing evidence as you go. Self-contained — no external goal system required. Run from the repo root; state persists in `./.fablize/` (resume with `status` even across sessions).
 
 ```bash
-bash "${CLAUDE_PLUGIN_ROOT}/hooks/py.sh" "${CLAUDE_PLUGIN_ROOT}/scripts/goals.py" create --brief "<summary>" \
-  --goal "title::verifiable objective" --goal "title::..."   # the last goal must be a verification story
+# one line, no `\` continuation: PowerShell and cmd (Kiro's shell tools) do not continue lines that way
+# the last goal must be a verification story
+bash "${CLAUDE_PLUGIN_ROOT}/hooks/py.sh" "${CLAUDE_PLUGIN_ROOT}/scripts/goals.py" create --brief "<summary>" --goal "title::verifiable objective" --goal "title::..."
 bash "${CLAUDE_PLUGIN_ROOT}/hooks/py.sh" "${CLAUDE_PLUGIN_ROOT}/scripts/goals.py" next         # activate a story + handoff
 # ... work that story only ...
 bash "${CLAUDE_PLUGIN_ROOT}/hooks/py.sh" "${CLAUDE_PLUGIN_ROOT}/scripts/goals.py" checkpoint --id G001 --status complete --evidence "<concrete evidence>"

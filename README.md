@@ -43,6 +43,16 @@ That's it. The checklists and the "did you check it?" reminder start working rig
   Setup may ask once whether you'd like to star the repo. It never stars anything unless you say yes.
 - **Uninstall:** `bash "${CLAUDE_PLUGIN_ROOT}/setup/uninstall.sh" local` (or `global`), then `/plugin uninstall fablize@cakel`.
 
+**Kiro CLI** (v2 and v3 engines; uses bash if it works, Python otherwise): Kiro has no Claude Code plugins, so install from a clone, from any shell, and use the `fablize` agent:
+
+```
+git clone https://github.com/cakel/fablize
+python fablize/setup/kiro.py global      # or: local   (py / python3 work too)
+kiro-cli chat --agent fablize            # or: kiro-cli agent set-default fablize
+```
+
+Remove with `python fablize/setup/kiro.py uninstall`. Details and limits: [GUIDE](docs/GUIDE.md#kiro-cli).
+
 ## Using it
 
 Just work as usual. fablize reacts to what you ask:

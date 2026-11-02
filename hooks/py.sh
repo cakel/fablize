@@ -7,8 +7,9 @@
 # non-zero) and the real Store Python's execution alias. Only a probe tells them
 # apart, so WindowsApps entries are probed; everything else execs directly (no
 # extra process on the common path). No interpreter -> exit 0 silently: hooks
-# fail open. setup.sh/uninstall.sh call this file too; it is the only copy of
-# this rule.
+# fail open. setup.sh/uninstall.sh call this file too. The one other copy of
+# this rule is setup/kiro.py interpreter(), for hosts where bash cannot run this
+# file at all; change both together.
 #
 # PYTHONUTF8=1: Windows Python otherwise reads stdin and writes stdout in the
 # locale codepage (cp949, cp1252). The hooks then crashed on a Korean prompt or a

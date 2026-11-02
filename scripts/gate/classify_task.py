@@ -28,7 +28,7 @@ DEEP_RE = re.compile(
     r"migration|database|auth|security|refactor|large|complex|implement the plan)\b|"
     r"끝까지|철저|전부|전체|배포|마이그레이션|인증|보안|리팩터"
 )
-# Debugging / root-cause signals, shared with router.sh (one list, one place).
+# Debugging / root-cause signals, shared with hooks/router.py (one list, one place).
 # "Find the root cause" / "figure out why" / "빌드가 깨졌어" carry no action verb,
 # so they used to classify as quick — "no forced verification" on exactly the task
 # that most needs it. "error handling" / "오류 처리" is a feature request, not a bug.
@@ -195,7 +195,8 @@ def classify_prompt(prompt: str) -> tuple[str, list[str]]:
 
 
 def signals(prompt: str) -> list[tuple[str, str]]:
-    """Pack signals for router.sh: [(name, matched text), ...] in a stable order."""
+    """Pack signals for hooks/router.py (router.sh on Claude Code, kiro.py on Kiro):
+    [(name, matched text), ...] in a stable order."""
     out = []
     for name, rx in (("investigation", DEBUG_RE), ("grounding", RENDER_RE)):
         m = rx.search(prompt or "")
