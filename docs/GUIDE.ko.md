@@ -107,6 +107,36 @@ goals status                                     # 지금 어디까지? (재시�
 - **Windows:** 훅은 Git Bash로 돌고, `hooks/py.sh`가 `python3`, `python`, `py`를 찾습니다. Python이 없으면 훅은 아무것도 하지 않습니다.
 - **제거:** `setup/uninstall.sh local|global`이 블록을 지웁니다. 훅은 `/plugin uninstall fablize@cakel` 전까지 남습니다.
 
+## Kiro CLI
+
+Kiro에는 Claude Code 플러그인 체계가 없어서 `hooks/hooks.json`이 등록되지 않고 `${CLAUDE_PLUGIN_ROOT}`도 없습니다. 저장소를 받아 아무 셸에서나 `python setup/kiro.py global|local`(`py`, `python3`도 됨)을 실행하면 Kiro 방식으로 설치됩니다.
+
+- 훅, 게이트 스크립트, `goals.py`, 팩을 `~/.fablize/kiro`에 복사합니다(`git pull` 후 다시 실행).
+- `fablize` 에이전트 `~/.kiro/agents/fablize.json`을 씁니다. 이 에이전트의 훅은 `hooks/kiro.py`를 실행합니다. 이 스크립트가 프롬프트에 맞는 체크리스트를 고르고, Kiro 훅 입력을 게이트가 읽는 형식으로 바꿉니다.
+- 스킬을 `~/.kiro/skills/fablize/SKILL.md`에 씁니다. 경로는 절대 경로이고, Claude 전용 첫 실행 질문은 뺐습니다.
+- 규칙 블록을 steering(`~/.kiro/steering/fablize.md`, `local`이면 `./.kiro/steering/`)으로 씁니다. Kiro는 steering을 매 세션 전부 읽습니다.
+
+자기가 쓰지 않은 파일을 덮어써야 하면 `*.fablize-bak.<시각>`으로 남깁니다. `python setup/kiro.py uninstall`은 자기가 쓴 파일만 지웁니다. 훅은 `kiro-cli chat --agent fablize`로 띄운 에이전트에서만 돕니다.
+
+**bash가 되면 bash, 안 되면 Python.** 설치기는 먼저 `bash`로 `hooks/py.sh`를 실행해 봅니다. 그 bash가 진짜 bash이고(Windows의 WSL 런처가 아님) Python의 응답을 받으면, 명령을 `bash "<rt>/hooks/py.sh" "<스크립트>" …`로 씁니다. 이 경우 인터프리터는 실행할 때마다 고릅니다. 그렇지 않으면 `python "<스크립트>" …`로 쓰는데, 첫 단어는 `python`, `py`, `python3` 중 실제로 실행되는 것입니다. 이 경우 Python을 바꾸면 설치기를 다시 실행하세요. 판정에는 Kiro가 쓸 PATH를 씁니다. Windows에서는 저장된 PATH인데, Git for Windows는 보통 여기에 `Git\cmd`만 넣고 bash는 넣지 않습니다. 그래서 설치를 실행한 셸(Git Bash)에서는 bash가 보여도, 판정 결과는 Python이 될 수 있습니다. 어느 쪽이든 첫 단어는 따옴표 없이 쓰고 인자만 따옴표로 감싸므로, PowerShell, cmd.exe, sh에서 그대로 실행됩니다. 첫 단어를 따옴표로 감싸면 PowerShell은 실행하지 않습니다.
+
+**한 번 설치로 두 엔진 모두 지원합니다.** 기본 엔진(v2)과 `--v3`은 다르지만 어댑터가 둘 다 받습니다.
+
+| | v2 | v3 |
+|---|---|---|
+| 훅 명령 실행 셸 (Windows) | PowerShell | cmd.exe |
+| 셸 도구 | `shell` | `execute_pwsh` |
+| 파일 도구 | `write` | `fs_write`, `str_replace`, `fs_append` |
+| 셸 결과 | JSON, `exit_status: "exit code: N"` | `Exit Code: N`로 끝나는 텍스트 |
+
+kiro-cli 2.33(v2)과 KiroCLI 2.37.1(v3), Windows에서 bash를 PATH에서 뺀 상태로 확인했습니다. Claude Code와 다른 점:
+
+- 에이전트 파일에 `resources` 필드를 일부러 넣지 않았습니다. 이 필드가 없는 커스텀 에이전트도 두 엔진 모두에서 workspace와 전역 steering을 전부 읽었고, workspace와 전역 skill 목록도 보았습니다(표식 단어로 확인). 여기에 다시 나열하면 steering이 컨텍스트에 두 번 들어갈 수 있습니다.
+- Kiro는 `postToolUse` 출력을 아무에게도 보여 주지 않아서 "같은 실패 반복" 알림이 모델에 닿지 않습니다. 끝내기 전 확인은 변경과 검사를 그대로 봅니다.
+- Kiro의 `stop` 훅은 `{"decision": "block"}`은 따르지만 종료 코드 2는 무시합니다. 끝내기 전 확인은 앞의 방식을 쓰므로 Claude Code와 똑같이 막습니다.
+- 조기 종료 훅(`finish-the-work.sh`)은 등록하지 않습니다. Claude Code의 대화 기록을 읽기 때문입니다.
+- Kiro 설치와 Claude Code 설치는 같은 파일을 쓰지 않습니다. 다만 둘 다 `~/.fablize/history/events.jsonl`에 기록을 이어 쓰고, 단계 추적기의 `./.fablize/`는 저장소마다 하나라서, 한 저장소에서 두 하네스가 동시에 단계 추적을 쓰면 서로의 계획을 거부합니다(`--force`를 쓰면 덮어씁니다).
+
 ## 한계
 
 - 능력은 못 올립니다. 정답 없는 창작의 완성도와 스스로 시작하는 발견은 플러그인 설정이 아니라 모델 선택의 영역입니다.

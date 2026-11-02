@@ -5,11 +5,41 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
 
 ## [Unreleased]
 
+## [2.1.1+cakel.9] — 2026-11-02
+
+### Added
+
+- **Kiro CLI support** (#21). `python setup/kiro.py global|local|uninstall` installs fablize
+  as a Kiro agent: the agent's hooks run `hooks/kiro.py`, which routes
+  the prompt and rewrites Kiro's hook payloads into the Claude Code shape the gates parse,
+  for both engines (v2: `write`/`shell`, results in `tool_response.items[].Json`; v3:
+  `fs_write`/`str_replace`/`fs_append`/`execute_pwsh`, results as text ending
+  `Exit Code: N`). Commands use bash (`bash ".../py.sh" <script>`) when a real bash on the
+  PATH Kiro will have runs py.sh, and `python <script>` otherwise; on Windows that PATH is the
+  saved one, which with Git for Windows usually lacks bash even when Git Bash has it. Either
+  form runs unchanged in PowerShell (v2's hook runner, both engines' shell tool on Windows),
+  cmd.exe (v3's hook runner) and sh.
+  The skill is written with absolute paths and without the Claude-only onboarding question;
+  the rules block goes to Kiro steering. Payloads and hook semantics were captured from
+  kiro-cli 2.33 and KiroCLI 2.37.1 (stop honours `{"decision": "block"}`, not exit 2;
+  `postToolUse` output is not shown). Before this the skill's first step failed in
+  PowerShell, `${CLAUDE_PLUGIN_ROOT}` did not exist, and no gate ran.
+
 ### Changed
 
+- **The router's logic moved to `hooks/router.py`**; `router.sh` only calls it, so Claude Code
+  hooks are unchanged and Kiro runs the same code without bash.
+- **The skill tells a non-Claude host how to read it**: `${CLAUDE_PLUGIN_ROOT}` is two
+  directories above SKILL.md, and without bash `bash ".../py.sh" X` is `python X`.
 - **`setup.sh` no longer prints the finish-the-work registration hint.** The opt-in note read
   as a to-do, so the model relayed it as one and users asked whether they had to register it.
   How to opt in now lives only in `docs/GUIDE.md`. (docs/DECISIONS.md D4)
+
+### Fixed
+
+- **The router names packs by its own location** (`C:/...` on Windows), not
+  `$CLAUDE_PLUGIN_ROOT`. Set by hand (as Kiro users did), the variable can name an older
+  plugin copy.
 
 ## [2.1.1+cakel.8] — 2026-10-26
 

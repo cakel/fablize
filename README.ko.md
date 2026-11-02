@@ -43,6 +43,16 @@ Claude Code에서:
   셋업이 저장소에 ⭐를 눌러 줄지 한 번 물어볼 수 있습니다. "예"라고 하지 않으면 아무것도 누르지 않습니다.
 - **제거:** `bash "${CLAUDE_PLUGIN_ROOT}/setup/uninstall.sh" local`(또는 `global`) 후 `/plugin uninstall fablize@cakel`.
 
+**Kiro CLI** (v2·v3 엔진 모두, bash가 되면 bash, 안 되면 Python): Kiro에는 Claude Code 플러그인 체계가 없으므로, 저장소를 받아 아무 셸에서나 설치한 뒤 `fablize` 에이전트로 실행합니다.
+
+```
+git clone https://github.com/cakel/fablize
+python fablize/setup/kiro.py global      # 또는 local   (py, python3도 됨)
+kiro-cli chat --agent fablize            # 또는 kiro-cli agent set-default fablize
+```
+
+제거는 `python fablize/setup/kiro.py uninstall`입니다. 세부 사항과 한계는 [GUIDE](docs/GUIDE.ko.md#kiro-cli)에 있습니다.
+
 ## 쓰는 법
 
 평소처럼 일하면 됩니다. fablize는 요청 내용에 맞춰 반응합니다.

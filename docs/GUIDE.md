@@ -107,6 +107,36 @@ Everything stays on your machine.
 - **Windows:** hooks run through Git Bash; `hooks/py.sh` finds `python3`, `python` or `py`. If no Python is found, the hooks do nothing.
 - **Uninstall:** `setup/uninstall.sh local|global` removes the block. The hooks stay until `/plugin uninstall fablize@cakel`.
 
+## Kiro CLI
+
+Kiro has no Claude Code plugin system, so `hooks/hooks.json` never registers there and `${CLAUDE_PLUGIN_ROOT}` does not exist. `python setup/kiro.py global|local` (run from a clone, from any shell; `py` or `python3` work too) sets fablize up the Kiro way:
+
+- copies the hooks, gate scripts, `goals.py` and packs to `~/.fablize/kiro` (re-run after `git pull`);
+- writes the `fablize` agent, `~/.kiro/agents/fablize.json`, whose hooks run `hooks/kiro.py`: it routes the prompt, then turns Kiro's hook payloads into the ones the gates read;
+- writes the skill to `~/.kiro/skills/fablize/SKILL.md` with absolute paths and without the Claude-only first-run question;
+- writes the rules block as steering (`~/.kiro/steering/fablize.md`, or `./.kiro/steering/` for `local`), which Kiro loads in full every session.
+
+A file it would replace that it did not write is kept as `*.fablize-bak.<time>`. `python setup/kiro.py uninstall` removes only what it wrote. Start Kiro with `kiro-cli chat --agent fablize`; the hooks run only under that agent.
+
+**Bash if it works, Python otherwise.** The installer runs `bash` against `hooks/py.sh` first. If that bash is a real one (not Windows' WSL launcher) and gets an answer from Python, the commands it writes are `bash "<rt>/hooks/py.sh" "<script>" …`, so the interpreter is picked at run time. If not, they are `python "<script>" …`, with whichever of `python`, `py`, `python3` runs; re-run the installer after changing Python. The check uses the PATH Kiro will have: on Windows that is the saved PATH, which with Git for Windows usually holds only `Git\cmd`, not bash, even when the shell you install from (Git Bash) has bash. Either way the first word is bare and the arguments are quoted, so PowerShell, cmd.exe and sh all run the line unchanged; a quoted first word would not run in PowerShell.
+
+**One install for both engines.** The default engine (v2) and `--v3` differ, and the adapter takes both:
+
+| | v2 | v3 |
+|---|---|---|
+| Hook commands run in (Windows) | PowerShell | cmd.exe |
+| Shell tool | `shell` | `execute_pwsh` |
+| File tools | `write` | `fs_write`, `str_replace`, `fs_append` |
+| Shell result | JSON, `exit_status: "exit code: N"` | text ending `Exit Code: N` |
+
+Observed with kiro-cli 2.33 (v2) and KiroCLI 2.37.1 (v3) on Windows, with bash removed from PATH. What differs from Claude Code:
+
+- The agent file has no `resources` field on purpose: a custom agent without one still loaded workspace and global steering in full and listed workspace and global skills, on both engines (probed with a marker word). Listing them again could put the steering in context twice.
+- Kiro shows `postToolUse` output to nobody, so the "the same failure repeated" note never reaches the model. The stop check still sees every change and check.
+- Kiro's `stop` hook honours `{"decision": "block"}` but not exit code 2; the stop check uses the former, so it blocks as on Claude Code.
+- The early-stop hook (`finish-the-work.sh`) is not registered: it reads Claude Code's transcript.
+- Kiro and Claude Code installs share no files, but both append to `~/.fablize/history/events.jsonl`, and the step tracker's `./.fablize/` is per repo: two harnesses tracking steps in one repo at once refuse each other's plan (or overwrite it with `--force`).
+
 ## Limits
 
 - It can't raise ability. Open-ended creative quality and self-started discovery are a model choice, not a plugin setting.
