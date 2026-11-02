@@ -7,11 +7,12 @@ Ported from fable-ish. Detects (a) which files changed and their kind, and
 
 from __future__ import annotations
 
+import os
 import re
 import shlex
 from typing import Any
 
-from ledger import classify_path_kind, redact
+from ledger import classify_path_kind, redact, redact_path
 
 
 # A verification runner, matched at the START of a segment's command (see
@@ -1183,18 +1184,77 @@ def _segment_writes(tokens: list[str]) -> list[str]:
 
 
 def changed_kinds(input_data: dict[str, Any]) -> list[str]:
+    return change_report(input_data)[0]
+
+
+def change_report(input_data: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """(kinds, names) from one walk: the kinds decide gating, exactly as before;
+    the names are for the Stop reason only.
+
+    Only an Edit/Write/MultiEdit/NotebookEdit path is named: it is given exactly
+    by the tool, and docs paths, the 'edit' placeholder and a temp notebook are
+    left out. A shell command is never named. Nine review rounds kept finding the
+    names read back out of a command wrong or leaking: a sed script taken for a
+    file (`s/OLD/hunter2/`, `/hunter2/d`), `$(curl -u user:pw ...)` inside a
+    redirect target, half-tokens, `cp -t`'s untouched source, paths relative to a
+    `cd` or `Push-Location`. Any text taken from the command can carry a secret."""
+    pairs, unnamed = _changes(input_data)
+    classified = [(raw, classify_path_kind(full)) for raw, full in pairs]
+    kinds = sorted({kind for _, kind in classified} | ({"other"} if unnamed else set()))
+    tool_name = str(input_data.get("tool_name") or "")
+    if tool_name in SHELL_TOOLS:
+        return kinds, []
+    project = str(input_data.get("cwd") or "") or None
+    names = [_relative(raw, project) for raw, kind in classified if kind != "docs" and raw != "edit"]
+    if not names and tool_name == "NotebookEdit":
+        tool_input = input_data.get("tool_input") if isinstance(input_data.get("tool_input"), dict) else {}
+        notebook = str(tool_input.get("notebook_path") or "")
+        # A temp notebook still counts (as on main), but naming it next to "keep such
+        # files in temp" advice would be self-contradictory.
+        names = [_relative(notebook, project)] if notebook and not is_scratch(notebook, project) else []
+    return kinds, list(dict.fromkeys(names))
+
+
+def _relative(path: str, project: str | None) -> str:
+    """A path under the project shown relative to it, so a long absolute path does
+    not lose its file name to truncation."""
+    # A filesystem or drive root is no project: `/etc/passwd` from cwd `/` stays absolute.
+    if project and path and os.path.dirname(os.path.abspath(project)) != os.path.abspath(project):
+        try:
+            rel = os.path.relpath(path, project)
+        except ValueError:  # another drive on Windows
+            return path
+        rel = rel.replace("\\", "/")
+        # `..hidden.py` is inside. A bare file name (cwd followed a `cd hooks`) would
+        # read as a root file, so it stays absolute.
+        if rel != ".." and not rel.startswith("../") and "/" in rel:
+            return rel
+    return path
+
+
+def describe_change(names: list[str], tool_name: str) -> str:
+    """The Stop reason's 'latest:' text: the edited path, redacted whole and then
+    shortened from the left (the file name is the useful end); or a generic label."""
+    if names:
+        name = redact_path(names[0]).replace("`", "'")
+        return name if len(name) <= 120 else "..." + name[-117:]
+    return "a shell command" if tool_name in SHELL_TOOLS else f"the last {tool_name or 'tool'} call"
+
+
+def _changes(input_data: dict[str, Any]) -> tuple[list[tuple[str, str]], bool]:
+    """([(path as written, path expanded)] that changed and are not scratch,
+    whether something unnamed changed too)."""
     # A failed Edit/Write changed nothing. A failed shell line may have changed
     # part of what it touched, so it still goes through the classification below.
     if failed_event(input_data) and str(input_data.get("tool_name") or "") not in SHELL_TOOLS:
-        return []
+        return [], False
     project = str(input_data.get("cwd") or "") or None
     paths = changed_paths(input_data)
     if paths:
-        real = [p for p in paths if not is_scratch(p.strip(), project)]
-        return sorted({classify_path_kind(p.strip()) for p in real})
+        return [(p.strip(), p.strip()) for p in paths if not is_scratch(p.strip(), project)], False
     tool_name = str(input_data.get("tool_name") or "")
     if tool_name not in SHELL_TOOLS:
-        return []
+        return [], False
     command = _SSH_PAYLOAD_RE.sub("ssh", command_from_input(input_data))
     ctx = _Context(command, project)
     written = shell_written_paths(command, project)
@@ -1206,14 +1266,13 @@ def changed_kinds(input_data: dict[str, Any]) -> list[str]:
         operands = mutated_paths(command, project) + [p for p in written if p]
         real = [p for p in operands if not ctx.scratch(p)]  # cd-relative scratch already dropped
         if real:
-            return sorted({classify_path_kind(ctx.expand(path)) for path in real})
+            return [(path, ctx.expand(path)) for path in real], False
         # Every named operand was scratch (`rm -rf /tmp/x`): nothing changed.
         # Nothing named at all: something changed that cannot be classified.
-        return [] if operands else ["other"]
+        return [], not operands
     if written:
-        named = [ctx.expand(p) for p in written if p]
-        return sorted({classify_path_kind(p) for p in named} | ({"other"} if "" in written else set()))
-    return []
+        return [(p, ctx.expand(p)) for p in written if p], "" in written
+    return [], False
 
 
 _STASH_RE = re.compile(r"\bgit\s+stash(?!\s+(?:list|show|pop|apply|drop|clear)\b)")

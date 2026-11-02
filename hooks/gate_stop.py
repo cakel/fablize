@@ -20,7 +20,7 @@ sys.path.insert(0, str(_HERE.parent / "scripts" / "gate"))
 sys.path.insert(0, str(_HERE.parent / "scripts" / "shadow"))
 
 from ledger import emit_json, load_ledger, read_stdin_json, update_ledger
-from verify_state import MAX_STOP_BLOCKS, should_block_stop, warning_after_max_blocks
+from verify_state import MAX_STOP_BLOCKS, VOIDED_REASON, should_block_stop, warning_after_max_blocks
 
 
 def _holdout_suppresses(input_data: dict) -> bool:
@@ -85,7 +85,9 @@ def main() -> int:
         # M3 holdout (env-gated, default off): 'off' arm sessions skip the gate
         # so we can measure the gate's effect against a pure baseline.
         if _holdout_suppresses(input_data):
-            _log_holdout(input_data, reason)
+            # The reason's class, not its paths: events.jsonl is measurement data
+            # that is grouped by reason and should hold no project file names.
+            _log_holdout(input_data, VOIDED_REASON if reason.startswith(VOIDED_REASON) else reason)
             emit_json({})
             return 0
         # Under the ledger lock, so a PostToolUse finishing at the same moment

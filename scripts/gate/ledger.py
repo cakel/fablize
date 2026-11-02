@@ -32,6 +32,11 @@ DEFAULT_LEDGER: dict[str, Any] = {
     "stop_blocks": 0,
     # A non-docs change has happened since the latest non-failing verification.
     "unverified_change": False,
+    # The latest non-docs change: the edited path (Edit/Write/NotebookEdit; via
+    # redact_path), or "a shell command" / "the last <Tool> call". Never text from
+    # a shell command, which can hold secrets. Named by the Stop reason when it
+    # voided a check.
+    "last_change": "",
     "verify_forbidden": False,
     # The staleness notice last shown in this session+cwd. Kept across prompts
     # (gate_prompt resets only the per-turn keys) so the notice is said once.
@@ -41,10 +46,23 @@ DEFAULT_LEDGER: dict[str, Any] = {
 
 SECRET_PATTERNS = [
     re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['\"]?[^'\"\s]+"),
+    # Unanchored, as on main: `key%3Dsk-proj-…` and `\nsk-…` must still be caught.
     re.compile(r"sk-[A-Za-z0-9_-]{12,}"),
     re.compile(r"gh[pousr]_[A-Za-z0-9_]{12,}"),
     re.compile(r"xox[baprs]-[A-Za-z0-9-]{12,}"),
 ]
+# URL userinfo up to the LAST @ before a path (user:pass, user:p@ss, user:p#w,
+# token@host). `?` and `#` are allowed in it: excluding them let `u:p?w@host`
+# through, and over-redacting `https://host?next=a@b` is the cheaper mistake.
+# Anchored after `://`, so linear: redact() runs on every tool output, and an
+# unanchored scp-style pattern tried here took 9 s on one 60,000-dot pytest line.
+_URL_USERINFO = re.compile(r"(?<=://)[^/\s'\"]+(?=@)")
+_AWS_KEY_ID = re.compile(r"(?<![0-9A-Z])(?:AKIA|ASIA)[0-9A-Z]{16}(?![0-9A-Z])")  # also in out_AKIA…
+SECRET_PATTERNS += [_URL_USERINFO, _AWS_KEY_ID]
+# For a FILE PATH shown to the model: the token patterns above match inside
+# ordinary names (`disk-usage-monitor.ts` -> `di[REDACTED].ts`), so a path gets
+# only the forms that can occur in one.
+PATH_SECRET_PATTERNS = [SECRET_PATTERNS[0], _URL_USERINFO, _AWS_KEY_ID]
 
 CODE_EXTS = {
     ".c", ".cc", ".cpp", ".cs", ".css", ".go", ".java", ".js", ".jsx", ".kt",
@@ -67,6 +85,15 @@ def redact(text: Any, limit: int = 500) -> str:
         value = pattern.sub("[REDACTED]", value)
     if len(value) > limit:
         return value[: limit - 3] + "..."
+    return value
+
+
+def redact_path(path: str) -> str:
+    """A file path for display: credential forms that can occur in a path are
+    redacted, non-printable characters (ESC, BEL, NUL) become `?`."""
+    value = "".join(c if c.isprintable() else "?" for c in str(path))
+    for pattern in PATH_SECRET_PATTERNS:
+        value = pattern.sub("[REDACTED]", value)
     return value
 
 
