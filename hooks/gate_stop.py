@@ -20,7 +20,7 @@ sys.path.insert(0, str(_HERE.parent / "scripts" / "gate"))
 sys.path.insert(0, str(_HERE.parent / "scripts" / "shadow"))
 
 from ledger import emit_json, load_ledger, read_stdin_json, update_ledger
-from verify_state import MAX_STOP_BLOCKS, should_block_stop, warning_after_max_blocks
+from verify_state import MAX_STOP_BLOCKS, VOIDED_REASON, should_block_stop, warning_after_max_blocks
 
 
 def _holdout_suppresses(input_data: dict) -> bool:
@@ -49,12 +49,15 @@ def _log_holdout(input_data: dict, reason: str) -> None:
         pass
 
 
-def _log_decision(input_data: dict, ledger: dict, event: str) -> None:
+def _log_decision(input_data: dict, ledger: dict, event: str, reason: str = "") -> None:
     """Out-of-band record of each block / cap warning (events.jsonl), so whether
     the gate should stay blocking can be judged from data (docs/DECISIONS.md D2)."""
     try:
         from shadow_logger import log_event
         log_event(input_data.get("session_id") or "", event, {
+            # Which reason was shown (its class, never its paths), so the effect of
+            # the "voided check" wording can be measured.
+            "reason": "voided" if reason.startswith(VOIDED_REASON) else ("plain" if reason else ""),
             "mode": ledger.get("task_mode"),
             "change_kinds": list(ledger.get("change_kinds") or []),
             "stop_blocks": int(ledger.get("stop_blocks") or 0),
@@ -85,7 +88,9 @@ def main() -> int:
         # M3 holdout (env-gated, default off): 'off' arm sessions skip the gate
         # so we can measure the gate's effect against a pure baseline.
         if _holdout_suppresses(input_data):
-            _log_holdout(input_data, reason)
+            # The reason's class, not its paths: events.jsonl is measurement data
+            # that is grouped by reason and should hold no project file names.
+            _log_holdout(input_data, VOIDED_REASON if reason.startswith(VOIDED_REASON) else reason)
             emit_json({})
             return 0
         # Under the ledger lock, so a PostToolUse finishing at the same moment
@@ -93,7 +98,7 @@ def main() -> int:
         def bump(current):
             current["stop_blocks"] = int(current.get("stop_blocks") or 0) + 1
         update_ledger(input_data, bump)
-        _log_decision(input_data, ledger, "stop_block")
+        _log_decision(input_data, ledger, "stop_block", reason)
         emit_json({"decision": "block", "reason": reason})
         return 0
 

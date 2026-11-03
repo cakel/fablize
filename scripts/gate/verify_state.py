@@ -67,6 +67,11 @@ def should_block_stop(ledger: dict[str, Any]) -> tuple[bool, str]:
     return block, reason
 
 
+# The fixed head of the "voided check" reason. gate_stop logs this, not the full
+# reason, to the holdout events: the rest names project paths.
+VOIDED_REASON = "fablize gate: a change was recorded after the last check"
+
+
 def _gap(ledger: dict[str, Any]) -> tuple[bool, str]:
     mode = ledger.get("task_mode") or "quick"
     stop_blocks = int(ledger.get("stop_blocks") or 0)
@@ -88,10 +93,36 @@ def _gap(ledger: dict[str, Any]) -> tuple[bool, str]:
         # never released the gate, only the 2-reminder cap did.
         # The user's ban outranks the gate even when the prompt matcher missed it
         # ("테스트 돌릴 필요 없어"): the model may answer the block by saying so.
+        tail = ("If none can run, or the user said not to run tests/commands, do not run them; "
+                "say so in the final response — this reminder repeats at most twice, then the turn "
+                "ends with an unverified warning to the user.")
+        results = ledger.get("verification_results") or []
+        if results and results[-1].get("success") is not False and ledger.get("last_change"):
+            # A passing check was voided by a later change. Saying which one and how
+            # to settle it: a verified turn told only "run a check" re-ran the same
+            # tests with no idea why (observed: an e2e fixture written next to the
+            # repo after pytest, then an e2e script the gate could not see).
+            # "the last check", not "passing": success None (no status seen) also lands here.
+            # "a change was recorded", not "files changed": a failed shell write is
+            # still counted (as on main) though it may have changed nothing.
+            # Temp forms named are only ones is_scratch accepts AND that resolve: not
+            # %TEMP% (expanded by neither tool), not $TEMP (unset in Bash on
+            # Linux/macOS, so `$TEMP/x` would write to /x).
+            # Only literal forms: `Join-Path $env:TEMP ...` and `${env:TEMP}` are not
+            # recognised, and in PowerShell `/tmp/` is the drive root, not temp.
+            # "counts too", said first: Kiro E2E (2026-11-03), 3 of 4 runs read the old
+            # "if a write is not part of this project ... those do not count" as "a
+            # fixture outside the project does not count" and stopped on that claim.
+            return True, (f"{VOIDED_REASON} (latest: "
+                          f"`{ledger['last_change']}`); a write outside this project counts too, "
+                          "unless it is in a temp folder. "
+                          "Re-run the narrowest check that covers it, or, if a check you wrote "
+                          "verifies it, run that check as check_<what> or verify_<what> "
+                          "(.py/.sh/.ps1) so the gate sees it. Keep fixture and scratch files in "
+                          "your session scratchpad or under a path that begins literally with /tmp/ "
+                          "in Bash or $env:TEMP\\ in PowerShell: writes there are not counted. " + tail)
         return True, ("fablize gate: run the narrowest verification command for the changed behavior "
-                      "before the final response. If none can run, or the user said not to run "
-                      "tests/commands, do not run them; say so in the final response — "
-                      "this reminder repeats at most twice, then the turn ends with an unverified warning to the user.")
+                      "before the final response. " + tail)
     # deep-only: normal mode no longer hard-blocks; it keeps an advisory prompt nudge.
     return False, ""
 

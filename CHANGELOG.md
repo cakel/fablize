@@ -5,6 +5,60 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
 
 ## [Unreleased]
 
+### Fixed
+
+- **An escaped quote no longer ends a quoted argument (Bash).** `git commit -m "… \"Only\" …
+  <noreply@…>" && … rg -q "pending"` was read as a redirect into a file named
+  ` && git push … rg -q `, so a passing test run was voided and the Stop gate asked for a
+  check the turn already had (observed in this repo). shlex(posix=False) ignores
+  backslashes; `\"`/`\'` are now masked before it, for Bash only (in PowerShell `\` is no
+  escape). Over 43,103 shell commands from local transcripts, 44 change: 29 false changes
+  gone, 4 real writes that were missed now seen (`git checkout -- img/…`, `sed -i` on a
+  `.py`: the line failed to parse before), 1 `sed -i` on a `.md` now docs, 10 named more
+  precisely. (`tests/test_gate_escaped_quote.py`)
+- **Docs: Kiro v3 runs the stop hook once per prompt.** GUIDE said the stop check blocks
+  on Kiro as on Claude Code. Observed on 2.37.1 with a probe hook that blocks every time:
+  v2 called it 3 times, v3 once, so on v3 there is no second reminder and no unverified
+  warning.
+
+### Changed
+
+- **The Stop block says why when a later change voided a check.** It says a change was
+  recorded after the last check and that a write outside the project counts too, names it when an Edit/Write/NotebookEdit made it
+  (`latest: src/app.py`; relative to the project, the end kept when long, redacted), and
+  gives the ways to settle it: re-run the check, keep fixtures and scratch files in the
+  session scratchpad or under a path starting with `/tmp/` (Bash) or `$env:TEMP\`
+  (PowerShell), where they do not count, and run a check you wrote as `check_<what>` /
+  `verify_<what>` so the gate sees it. Observed: pytest passed, an end-to-end fixture was
+  then written next to the repo, and an e2e script the gate could not see ran; the block
+  said only "run the narrowest verification command".
+  A shell command is described only as `a shell command`, never by text taken from it:
+  nine red-team rounds kept finding names read back out of a command wrong or leaking
+  (a sed script read as a file, `s/OLD/hunter2/`; `$(curl -u user:pw …)` inside a redirect
+  target; `out/${TOKEN}.json`; half-tokens; `cp -t`'s untouched source; paths relative to
+  a `cd`). The holdout log records the reason's class, not its paths, and each
+  `stop_block` event records it (`voided` / `plain`) so the wording's effect can be measured.
+  Naming never costs the gate a change: an error while naming falls back to the generic label.
+  (`tests/test_gate_block_reason.py`)
+- **Redaction also covers URL credentials (`https://user:pass@host`, `token@host`, a
+  password with `@`, `?` or `#`, quoted or followed by punctuation) and AWS key ids.** An
+  `@` in a URL query with no path before it (`https://host?next=a@b`) is over-redacted;
+  missing a password is the worse mistake. Both patterns are linear: an scp-style
+  `user:pass@host:/path` pattern tried in review took 9 s on one 60,000-dot pytest line
+  (redaction runs on every tool output) and was dropped; scp-style credentials stay
+  unredacted, as before. The `sk-…`, `gh*_…` and `xox*-…` patterns are unchanged; an
+  edited path shown in the reason gets only the forms that occur in paths
+  (`redact_path()`), so `src/disk-usage-monitor.ts` is not shown as `src/di[REDACTED].ts`,
+  and non-printable characters in it become `?`.
+
+What counts as a change, and how a check's outcome is read, are unchanged:
+`changed_kinds()`, `verification_record()` and `detect_failure()` matched main on all
+39,596 payloads compared. Two attempts to exclude writes outside the repo each regressed in
+review (a `cd` to a parent folder hid edits to the repo itself; shell edits to
+`~/.claude` went ungated), and a stricter `$TEMP` match was dropped because it counted
+`$TMPFILE` / `$tmp_out` scratch files. Known, unchanged: a variable that merely starts
+with TMP/TEMP (`$TEMPLATES/…`) is treated as a temp folder.
+
 ## [2.1.1+cakel.9] — 2026-11-02
 
 ### Added

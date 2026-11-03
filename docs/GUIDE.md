@@ -72,6 +72,7 @@ A short follow-up like "yes, go ahead" keeps the previous mode. "Just explain" a
 - **At most two reminders per request.** After that Claude finishes, and you see "files changed this turn but no successful verification was observed".
 - **Your word wins.** Say "don't run the tests" or "어떤 명령도 돌리지 마" and there is no reminder: Claude is told the gate read it that way and, if that is what you meant, not to run anything and to say the change is unchecked. Only common phrasings are recognised; for others ("no need to run the tests") the reminder still comes, but it tells Claude a "don't run" from you outranks it.
 - **Background work pauses it.** While a test run or subagent is still going, the session isn't done, so nothing is held back.
+- **It says why.** When a check passed but something changed after it, the reminder says so (a write outside the project counts too), names the file if an edit tool changed it (a shell command is only called "a shell command"), and gives the ways out: re-run the check, keep fixtures and scratch files in the session scratchpad or under a path starting with `/tmp/` in Bash or `$env:TEMP\` in PowerShell (they don't count there; a folder named `tmp` inside the project does), or run a custom check as `check_<what>` / `verify_<what>` so it is seen.
 - **It fails open.** Any internal error lets Claude finish.
 - **How it reads a check.** It parses the shell command (pytest, npm test, cargo test, go test, make check, `python test_x.py`, …) and its output, including `; echo "exit=$?"` endings. That parsing is a heuristic: expect an occasional wrong reminder, or a missed one.
 
@@ -133,7 +134,7 @@ Observed with kiro-cli 2.33 (v2) and KiroCLI 2.37.1 (v3) on Windows, with bash r
 
 - The agent file has no `resources` field on purpose: a custom agent without one still loaded workspace and global steering in full and listed workspace and global skills, on both engines (probed with a marker word). Listing them again could put the steering in context twice.
 - Kiro shows `postToolUse` output to nobody, so the "the same failure repeated" note never reaches the model. The stop check still sees every change and check.
-- Kiro's `stop` hook honours `{"decision": "block"}` but not exit code 2; the stop check uses the former, so it blocks as on Claude Code.
+- Kiro's `stop` hook honours `{"decision": "block"}` but not exit code 2; the stop check uses the former. The v2 engine runs the stop hook again after each block, as Claude Code does. The v3 engine (observed on 2.37.1) runs it once per prompt: the first block is honoured, but after it the turn ends without another stop check, so a second reminder and the unverified warning never come.
 - The early-stop hook (`finish-the-work.sh`) is not registered: it reads Claude Code's transcript.
 - Kiro and Claude Code installs share no files, but both append to `~/.fablize/history/events.jsonl`, and the step tracker's `./.fablize/` is per repo: two harnesses tracking steps in one repo at once refuse each other's plan (or overwrite it with `--force`).
 

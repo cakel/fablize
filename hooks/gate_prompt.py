@@ -201,6 +201,7 @@ def main() -> int:
         ledger["failures"] = []
         ledger["stop_blocks"] = 0
         ledger["unverified_change"] = False
+        ledger["last_change"] = ""
         # "ok, go on" after "don't run the tests" is still under that prohibition;
         # a follow-up that asks for a check ("now run the tests") lifts it. A prompt
         # that is deep on its own ("승인합니다. 이제 결제 모듈 철저히 리팩터해줘") is a new

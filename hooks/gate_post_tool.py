@@ -15,7 +15,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts" / "gat
 
 from ledger import add_unique, emit_json, read_stdin_json, update_ledger
 from parse_tool_result import (
-    changed_kinds,
+    change_report,
+    describe_change,
     command_from_input,
     detect_failure,
     repeated_failure,
@@ -25,7 +26,7 @@ from parse_tool_result import (
 
 def main() -> int:
     input_data = read_stdin_json()
-    kinds = changed_kinds(input_data)
+    kinds, names = change_report(input_data)  # one walk: kinds gate, names explain
     failure = detect_failure(input_data)
     verification = verification_record(input_data)
     command = command_from_input(input_data)
@@ -36,6 +37,10 @@ def main() -> int:
             add_unique(ledger, "change_kinds", kinds)
             if set(kinds) - {"docs"}:
                 ledger["unverified_change"] = True
+                # Paths as written, never the command or an expansion: those carry
+                # secrets redact() does not know (AWS_SECRET_ACCESS_KEY=..., Bearer
+                # headers, `${TOKEN}` in a path), and the path is what the reason needs.
+                ledger["last_change"] = describe_change(names, str(input_data.get("tool_name") or ""))
         if verification:
             ledger["verification_results"].append(verification)
             # Same call order as the tool: `sed -i … && pytest` edits, then checks.
