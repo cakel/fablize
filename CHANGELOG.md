@@ -18,6 +18,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
   `--resume`: after a "don't run tests" turn the next reply began "Previous change to
   `test_calc.py` … was never verified"; after a fixture turn the model answered the note
   (it had read the fixture back with `Get-Content`, which the gate does not count).
+  Only the same session sees it: a new session did not, and `--resume` after that new
+  session opened it, not the unverified one. `--output-format stream-json` carries a
+  hook's name and status only, and SessionEnd results are only debug-logged.
   (`tests/test_kiro.py`)
 
 ## [2.1.1+cakel.10] — 2026-11-03
