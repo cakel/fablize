@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
 
 ## [Unreleased]
 
+## [2.1.1+cakel.13] — 2026-11-03
+
 ### Fixed
 
 - **router.sh runs without `bash` or `dirname` on PATH** (#28). Git's `usr/bin/bash.exe`
