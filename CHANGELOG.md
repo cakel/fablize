@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
 
 ## [Unreleased]
 
+## [2.1.1+cakel.10] — 2026-11-03
+
 ### Fixed
 
 - **An escaped quote no longer ends a quoted argument (Bash).** `git commit -m "… \"Only\" …
