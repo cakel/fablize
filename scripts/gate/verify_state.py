@@ -110,13 +110,16 @@ def _gap(ledger: dict[str, Any]) -> tuple[bool, str]:
             # Linux/macOS, so `$TEMP/x` would write to /x).
             # Only literal forms: `Join-Path $env:TEMP ...` and `${env:TEMP}` are not
             # recognised, and in PowerShell `/tmp/` is the drive root, not temp.
+            # "counts too", said first: Kiro E2E (2026-11-03), 3 of 4 runs read the old
+            # "if a write is not part of this project ... those do not count" as "a
+            # fixture outside the project does not count" and stopped on that claim.
             return True, (f"{VOIDED_REASON} (latest: "
-                          f"`{ledger['last_change']}`). Re-run the narrowest check that covers it. "
-                          "If a write is not part of this project (a fixture or scratch file), keep "
-                          "such files in your session scratchpad, or write them to a path that begins "
-                          "literally with /tmp/ in Bash or $env:TEMP\\ in PowerShell; those do not "
-                          "count. If a check you wrote really verifies it, run it as check_<what> or "
-                          "verify_<what> (.py/.sh/.ps1) so the gate sees it. " + tail)
+                          f"`{ledger['last_change']}`); a write outside this project counts too. "
+                          "Re-run the narrowest check that covers it, or, if a check you wrote "
+                          "verifies it, run that check as check_<what> or verify_<what> "
+                          "(.py/.sh/.ps1) so the gate sees it. Only writes in your session scratchpad "
+                          "or under a path that begins literally with /tmp/ in Bash or $env:TEMP\\ in "
+                          "PowerShell are not counted: keep fixture and scratch files there. " + tail)
         return True, ("fablize gate: run the narrowest verification command for the changed behavior "
                       "before the final response. " + tail)
     # deep-only: normal mode no longer hard-blocks; it keeps an advisory prompt nudge.

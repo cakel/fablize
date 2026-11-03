@@ -5,10 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
 
 ## [Unreleased]
 
+### Fixed
+
+- **Docs: Kiro v3 runs the stop hook once per prompt.** GUIDE said the stop check blocks
+  on Kiro as on Claude Code. Observed on 2.37.1 with a probe hook that blocks every time:
+  v2 called it 3 times, v3 once, so on v3 there is no second reminder and no unverified
+  warning.
+
 ### Changed
 
 - **The Stop block says why when a later change voided a check.** It says a change was
-  recorded after the last check, names it when an Edit/Write/NotebookEdit made it
+  recorded after the last check and that a write outside the project counts too, names it when an Edit/Write/NotebookEdit made it
   (`latest: src/app.py`; relative to the project, the end kept when long, redacted), and
   gives the ways to settle it: re-run the check, keep fixtures and scratch files in the
   session scratchpad or under a path starting with `/tmp/` (Bash) or `$env:TEMP\`

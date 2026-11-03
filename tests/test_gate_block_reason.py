@@ -77,6 +77,7 @@ def test_change_after_a_passing_check_says_why_and_how_out():
     assert result.get("decision") == "block"
     reason = result["reason"]
     assert AFTER in reason and "latest: `a shell command`" in reason
+    assert "outside this project counts too" in reason  # Kiro E2E: models read the old text as "it does not"
     assert "check_" in reason and "verify_" in reason  # how a custom check becomes visible
     assert "scratchpad" in reason and "/tmp/" in reason and "$env:TEMP" in reason
     assert "%TEMP%" not in reason  # expanded by neither the Bash nor the PowerShell tool
