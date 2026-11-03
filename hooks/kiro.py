@@ -107,11 +107,16 @@ def carried_gap(payload: dict) -> str:
             pass
         latest = str(ledger.get("last_change") or "") or "a change"
         # The user's "don't run tests" outlives the turn (gate_prompt keeps it while the
-        # prompt does not lift it): then only report, never push for a check.
+        # prompt does not lift it): then only report, never push for a check. A ban the
+        # matcher missed ("테스트 돌릴 필요 없어") keeps the stop reason's escape.
         verify = ("" if ledger.get("verify_forbidden") is True
-                  else ", and verify it if this prompt continues the same work")
-        return (f"fablize gate: the previous turn ended with a change that no observed check covered "
-                f"(latest: `{latest}`). Tell the user that in one line before anything else{verify}.")
+                  else ", and verify it if this prompt continues the same work, unless the user "
+                       "said not to run tests or commands")
+        results = ledger.get("verification_results") or []
+        what = ("ended with its last check failing" if results and results[-1].get("success") is False
+                else "ended with a change that no observed check covered")
+        return (f"fablize gate: the previous turn {what} (latest change: `{latest}`). Tell the user "
+                f"that in one line before anything else{verify}.")
     except Exception:  # noqa: BLE001
         return ""
 

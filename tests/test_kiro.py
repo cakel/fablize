@@ -258,3 +258,23 @@ def test_carried_note_is_logged_for_measurement():
     run("prompt", prompt("e1", "next"), data)
     events = Path(data, "history", "events.jsonl").read_text(encoding="utf-8")
     assert '"kiro_carried_gap"' in events and "auth.py" not in events
+
+
+# Red team round 1 (#25).
+def test_carried_note_keeps_the_escape_for_a_ban_the_matcher_missed():
+    data = tempfile.mkdtemp(prefix="fz_kiro_data_")
+    run("prompt", prompt("m1", DEEP + ". 테스트 돌릴 필요 없어"), data)  # not matched as a ban
+    run("post", v3_write("m1", "src/auth.py"), data)
+    run("stop", v3_stop("m1"), data)
+    nxt = run("prompt", prompt("m1", "ok"), data)
+    assert "previous turn ended" in nxt and "unless the user said not to run" in nxt
+
+
+def test_carried_note_says_a_failed_check_failed():
+    data = tempfile.mkdtemp(prefix="fz_kiro_data_")
+    run("prompt", prompt("m2", DEEP), data)
+    run("post", v3_write("m2", "src/auth.py"), data)
+    run("stop", v3_stop("m2"), data)
+    run("post", v3_shell("m2", "python -m pytest -q", 1, "1 failed, 3 passed"), data)
+    nxt = run("prompt", prompt("m2", "next"), data)
+    assert "last check failing" in nxt and "no observed check covered" not in nxt

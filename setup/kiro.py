@@ -188,7 +188,8 @@ def install(steering: Path) -> None:
         "name": "fablize",
         "description": f"Kiro agent with fablize hooks ({MARKER}): routes debugging/render prompts to "
                        "their checklist, records file changes and checks, and blocks stopping after an "
-                       "unverified code change (at most twice per prompt).",
+                       "unverified code change (at most twice per prompt on the v2 engine, once on "
+                       "v3, which runs the stop hook once).",
         "tools": ["*"],
         "includeMcpJson": True,
         "hooks": {"userPromptSubmit": hook("prompt"), "postToolUse": post, "stop": hook("stop")},
