@@ -187,7 +187,11 @@ fi
 
 echo "fablize → $scope ($CLAUDE_MD)"
 
-mkdir -p "$(dirname "$CLAUDE_MD")"; touch "$CLAUDE_MD"
+# Create CLAUDE.md if missing with a shell redirection, not `touch`: some
+# managed Windows machines block touch.exe (Permission denied, exit 126), and
+# setup then died before the backup. `: >>` creates the file without changing
+# an existing one, and needs no external binary.
+mkdir -p "$(dirname "$CLAUDE_MD")"; : >> "$CLAUDE_MD"
 ts=$(pyrun -c "import time;print(int(time.time()))")
 cp "$CLAUDE_MD" "$CLAUDE_MD.fablize-bak.$ts" && echo "  backup: $CLAUDE_MD.fablize-bak.$ts"
 

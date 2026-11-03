@@ -57,8 +57,10 @@ def fake_plugin_root(base: Path, version: str) -> Path:
     return root
 
 
-def run_setup(root: Path, home: Path) -> subprocess.CompletedProcess:
+def run_setup(root: Path, home: Path, path_prefix: Path = None) -> subprocess.CompletedProcess:
     env = dict(os.environ)
+    if path_prefix is not None:
+        env["PATH"] = str(path_prefix) + os.pathsep + env.get("PATH", "")
     # Redirect every home-ish variable: bash reads HOME, but Python's
     # expanduser() on Windows prefers USERPROFILE, then HOMEDRIVE+HOMEPATH.
     env.update(HOME=str(home), USERPROFILE=str(home),
@@ -116,6 +118,24 @@ with tempfile.TemporaryDirectory() as tmp:
     check("block names at least one asset", len(referenced) > 0, True)
     check("every referenced asset exists",
           sorted({p for p in referenced if not Path(p).exists()}), [])
+
+    # setup.sh must not need the `touch` binary. Observed live: a managed
+    # Windows machine blocks touch.exe ("/usr/bin/touch: Permission denied"),
+    # and setup died before writing anything. Shadow touch with one that always
+    # fails, on a fresh HOME where CLAUDE.md does not exist yet.
+    blocked = tmp / "blocked-bin"
+    blocked.mkdir()
+    fake_touch = blocked / "touch"
+    fake_touch.write_text("#!/bin/sh\necho 'touch blocked' >&2\nexit 126\n", encoding="utf-8")
+    fake_touch.chmod(0o755)
+    home_nt = tmp / "home-no-touch"
+    (home_nt / ".claude").mkdir(parents=True)
+    proc_nt = run_setup(root, home_nt, path_prefix=blocked)
+    check("setup succeeds without a working touch", proc_nt.returncode, 0)
+    check("no touch error in stderr", "touch blocked" in proc_nt.stderr, False)
+    check("CLAUDE.md created without touch",
+          "FABLIZE:BEGIN" in (home_nt / ".claude" / "CLAUDE.md").read_text(encoding="utf-8")
+          if (home_nt / ".claude" / "CLAUDE.md").exists() else False, True)
 
     # Re-running after an upgrade must refresh the copies in place.
     root2 = fake_plugin_root(tmp, "9.9.10")
