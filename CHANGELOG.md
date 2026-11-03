@@ -7,6 +7,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
 
 ### Fixed
 
+- **An escaped quote no longer ends a quoted argument (Bash).** `git commit -m "… \"Only\" …
+  <noreply@…>" && … rg -q "pending"` was read as a redirect into a file named
+  ` && git push … rg -q `, so a passing test run was voided and the Stop gate asked for a
+  check the turn already had (observed in this repo). shlex(posix=False) ignores
+  backslashes; `\"`/`\'` are now masked before it, for Bash only (in PowerShell `\` is no
+  escape). Over 43,103 shell commands from local transcripts, 44 change: 29 false changes
+  gone, 4 real writes that were missed now seen (`git checkout -- img/…`, `sed -i` on a
+  `.py`: the line failed to parse before), 1 `sed -i` on a `.md` now docs, 10 named more
+  precisely. (`tests/test_gate_escaped_quote.py`)
 - **Docs: Kiro v3 runs the stop hook once per prompt.** GUIDE said the stop check blocks
   on Kiro as on Claude Code. Observed on 2.37.1 with a probe hook that blocks every time:
   v2 called it 3 times, v3 once, so on v3 there is no second reminder and no unverified

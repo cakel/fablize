@@ -1071,7 +1071,33 @@ def _mask_quoted_newlines(text: str) -> str:
     return "".join(out)
 
 
-def shell_written_paths(command: str, project: str | None = None) -> list[str]:
+def _mask_escaped_quotes(text: str) -> str:
+    """Bash only: `\\"` inside "…" and `\\'`/`\\"` outside quotes are literal quote
+    characters. shlex(posix=False) does not know backslashes, so it closed the
+    quote there: a commit message with `\\"Only\\"` then `<noreply@…>` put the `>`
+    outside the quotes and read ` && git push … ` as a file written. The quote
+    after the backslash becomes `_`; same length out as in. Not for PowerShell,
+    where `\\` is no escape and "C:\\out\\" ends at its last quote."""
+    out, quote, i = list(text), "", 0
+    while i < len(out):
+        ch = out[i]
+        if quote == "'":
+            if ch == "'":
+                quote = ""
+        elif ch == "\\" and i + 1 < len(out):
+            if out[i + 1] in "\"'" and (quote == "" or out[i + 1] == '"'):
+                out[i + 1] = "_"
+            i += 2  # `\\` is one literal backslash: the next quote is a real one
+            continue
+        elif ch == quote:
+            quote = ""
+        elif not quote and ch in "'\"":
+            quote = ch
+        i += 1
+    return "".join(out)
+
+
+def shell_written_paths(command: str, project: str | None = None, posix: bool = True) -> list[str]:
     """Files a shell line writes without a MUTATING_CMDS verb.
 
     Returns paths, or [""] when something is written but cannot be named (`git
@@ -1083,7 +1109,8 @@ def shell_written_paths(command: str, project: str | None = None) -> list[str]:
     out: list[tuple[str, bool]] = []
     ctx, under = _Context(command, project), False
     text = _strip_heredocs(command)
-    for line in _mask_quoted_newlines(text).splitlines():
+    masked = _mask_quoted_newlines(text)
+    for line in (_mask_escaped_quotes(masked) if posix else masked).splitlines():
         try:
             # posix=False keeps quotes on tokens, so a quoted ">" (`rg ">" src/`)
             # stays an argument instead of reading as a redirect. Quotes are
@@ -1260,7 +1287,7 @@ def _changes(input_data: dict[str, Any]) -> tuple[list[tuple[str, str]], bool]:
         return [], False
     command = _SSH_PAYLOAD_RE.sub("ssh", command_from_input(input_data))
     ctx = _Context(command, project)
-    written = shell_written_paths(command, project)
+    written = shell_written_paths(command, project, posix=tool_name != "PowerShell")
     if MUTATING_TOOL_RE.search(command) or (command_words(command) & MUTATING_CMDS):
         # Classify what the command names before falling back to "other". Reporting
         # "other" for `cp notes.md docs/notes.md` is a claim about a file the gate
