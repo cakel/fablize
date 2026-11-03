@@ -66,7 +66,9 @@ Lead with the outcome. Stay within the requested scope (no incidental refactors 
 
 ## 3-2. Make your checks visible to the gate
 
-The Stop gate counts a check only when it can see one ran: a test runner (`pytest`, `npm test`, `cargo test`, `make test` …), a script named `check_*`, `verify_*`, `*_lint`, `*_gate`, `test_*` (`.py`, `.sh`, `.ps1`), `cmp`, or an inline `python - <<EOF` that only asserts. A check it cannot recognise — a PowerShell COM page count, an ad-hoc one-liner — still verifies the work, but put it in a `check_<what>.ps1`/`.py` script and run that, so the evidence is recorded instead of looking like none.
+**The Stop gate blocks only on `deep` tasks**, and only when files changed and no passing check came after the last change. A task is `deep` when the prompt carries words like `deep`, `thorough`, `refactor`, `deploy`, `migration`, `auth`, `security` (or their Korean forms), or a production / database / remote-write risk. It blocks at most twice per prompt (once on the Kiro v3 engine, which runs the stop hook once). Regular fixes and debugging are `normal`: you get the prompt nudge and nothing stops you from finishing unverified, so run the check yourself before claiming the fix works.
+
+The gate counts a check only when it can see one ran: a test runner (`pytest`, `npm test`, `cargo test`, `make test` …), a script named `check_*`, `verify_*`, `*_lint`, `*_gate`, `test_*` (`.py`, `.sh`, `.ps1`), `cmp`, or an inline `python - <<EOF` that only asserts. A check it cannot recognise — a PowerShell COM page count, an ad-hoc one-liner — still verifies the work, but put it in a `check_<what>.ps1`/`.py` script and run that, so the evidence is recorded instead of looking like none.
 
 ## 4. At the capability ceiling (escalate)
 

@@ -187,9 +187,9 @@ def install(steering: Path) -> None:
     config = {
         "name": "fablize",
         "description": f"Kiro agent with fablize hooks ({MARKER}): routes debugging/render prompts to "
-                       "their checklist, records file changes and checks, and blocks stopping after an "
-                       "unverified code change (at most twice per prompt on the v2 engine, once on "
-                       "v3, which runs the stop hook once).",
+                       "their checklist, records file changes and checks, and, on deep tasks only, blocks "
+                       "stopping after an unverified code change (at most twice per prompt on the v2 "
+                       "engine, once on v3, which runs the stop hook once).",
         "tools": ["*"],
         "includeMcpJson": True,
         "hooks": {"userPromptSubmit": hook("prompt"), "postToolUse": post, "stop": hook("stop")},
@@ -224,6 +224,9 @@ def install(steering: Path) -> None:
         print("  ✓ kiro-cli agent validate" if ok else "  ! kiro-cli agent validate failed")
     print("fablize for Kiro installed. Start it with: kiro-cli chat --agent fablize")
     print("  (or: kiro-cli agent set-default fablize)")
+    # A running session keeps the hooks it loaded at start (issue #28: one that began
+    # before an update kept running the old bash hooks).
+    print("  Restart any running Kiro session: it keeps the hooks it started with.")
 
 
 def uninstall() -> None:
