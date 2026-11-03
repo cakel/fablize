@@ -13,7 +13,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
   stdout, hook stderr and failing hooks are shown to neither, and SessionEnd is session
   teardown. So `hooks/kiro.py` reads the ledger at the next prompt, before it is reset,
   and when the previous turn ended with a change no check covered, tells the model to
-  say so to the user first (without asking for a check when the user ruled checks out),
+  say so to the user first ("its last check failing" when that is how it ended; no request
+  for a check when the user ruled checks out),
   only with a session id, not in the holdout's off arm, and logged as `kiro_carried_gap`.
   On v3 (its Stop payload has `hook_event_name: "Stop"`; v2 sends `"stop"`) the one block's
   "repeats at most twice" clause is replaced by "comes once, not twice". Real v3 sessions, two prompts each with
