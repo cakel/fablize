@@ -5,6 +5,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
 
 ## [Unreleased]
 
+### Fixed
+
+- **router.sh runs without `bash` or `dirname` on PATH** (#28). Git's `usr/bin/bash.exe`
+  started by path from a PATH with no Git directory does not add `/usr/bin`, so the bare
+  `bash` and `dirname` in `router.sh` were not found. A Kiro session that kept a
+  pre-update hook running it printed `router.sh: line 5: bash: command not found` on every
+  prompt. It now runs `"$BASH"`, and falls back to `${0%/*}` when `dirname` fails.
+  `tests/test_router.py` runs it with a `bash` and a `dirname` that always fail placed
+  first on PATH. `setup/kiro.py` now ends with "Restart any running Kiro session": a
+  running session keeps the hooks it started with.
+
+### Changed
+
+- **The deep-only Stop gate is now documented where the agent reads it** (#29).
+  SKILL.md 3-2 and the Kiro agent description said the gate blocks after an unverified
+  change, without saying it does so only on `deep` tasks. Regular fixes and debugging
+  classify as `normal` and get only the prompt nudge. Both now say so, along with the cap
+  (twice per prompt, once on Kiro v3).
+
 ## [2.1.1+cakel.12] — 2026-11-03
 
 ### Fixed

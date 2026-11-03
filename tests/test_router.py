@@ -99,6 +99,22 @@ check("router: english render signal", "[fablize:grounding]" in route("build an 
 check("router: no signal -> silent", route("README 오타 고쳐줘"), "")
 check("router: '안 돼' instruction is not a bug signal", route("그렇게 바꾸면 안 돼"), "")
 check("router: exit 0 on empty stdin", hook("router.sh", {})[0], 0)
+# Issue #28: Git's usr/bin/bash.exe started by path from a PATH without Git finds
+# neither `bash` nor `dirname`, and router.sh printed "bash: command not found" on
+# every prompt. Shadow both with ones that always fail (as test_setup_paths.py does
+# for touch): router.sh must still route, via "$BASH" and the ${0%/*} fallback.
+_blocked = Path(tempfile.mkdtemp(prefix="fz_rt_blocked_"))
+for _name in ("bash", "dirname"):
+    (_blocked / _name).write_text(f"#!/bin/sh\necho '{_name} blocked' >&2\nexit 127\n", encoding="utf-8")
+    (_blocked / _name).chmod(0o755)
+_p = subprocess.run([BASH, (HOOKS / "router.sh").as_posix()],
+                    input=json.dumps({"prompt": "figure out why login fails"}),
+                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
+                    env=dict(os.environ, CLAUDE_PLUGIN_ROOT=str(HOOKS.parent), FABLIZE_DATA=_DATA,
+                             PATH=str(_blocked) + os.pathsep + os.environ.get("PATH", "")))
+check("router: routes when bash and dirname are not usable on PATH",
+      "[fablize:investigation]" in _p.stdout, True)
+check("router: no blocked-binary error", "blocked" in _p.stderr, False)
 # Router and task-mode classifier share one signal list (classify_task.DEBUG_RE):
 # root-cause asks with no bug noun were silent here and "quick" there.
 for p_ in ["근본 원인 찾아서 고쳐줘", "Find the root cause of the timeout", "figure out why login fails",
