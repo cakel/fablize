@@ -78,6 +78,7 @@ def test_change_after_a_passing_check_says_why_and_how_out():
     reason = result["reason"]
     assert AFTER in reason and "latest: `a shell command`" in reason
     assert "outside this project counts too" in reason  # Kiro E2E: models read the old text as "it does not"
+    assert "Only writes" not in reason  # is_scratch exempts more (a tmp segment, *.log): no exhaustive claim
     assert "check_" in reason and "verify_" in reason  # how a custom check becomes visible
     assert "scratchpad" in reason and "/tmp/" in reason and "$env:TEMP" in reason
     assert "%TEMP%" not in reason  # expanded by neither the Bash nor the PowerShell tool
@@ -219,7 +220,7 @@ def test_redact_is_linear_on_long_dotted_output():
     import time
     t0 = time.time()
     redact("tests/test_x.py " + "." * 60_000 + " [100%] 1 passed", 10 ** 6)
-    assert time.time() - t0 < 0.5
+    assert time.time() - t0 < 3  # ~0.01 s linear; the quadratic pattern took 9 s; slack for a loaded runner
 
 
 def test_tokens_after_an_alphanumeric_are_still_redacted():
@@ -230,3 +231,21 @@ def test_tokens_after_an_alphanumeric_are_still_redacted():
 def test_control_characters_in_a_path_are_neutralised():
     out = label({"file_path": os.path.join(REPO, "src", "\x1b[31mred.py")})
     assert "\x1b" not in out and "red.py" in out
+
+
+# --- confirmation review -----------------------------------------------------
+
+def test_stop_block_event_records_the_reason_class_not_its_paths():
+    voided = run_turn(EDIT, PYTEST, ("Write", {"file_path": os.path.join(REPO, "src", "secret_plan.py")}, ""))
+    assert '"reason": "voided"' in voided["_events"] and "secret_plan" not in voided["_events"]
+    assert '"reason": "plain"' in run_turn(EDIT)["_events"]
+
+
+def test_a_naming_error_never_costs_the_gate_its_kinds():
+    real = parse_tool_result._relative
+    parse_tool_result._relative = lambda *a: (_ for _ in ()).throw(OSError("boom"))
+    try:
+        pl = {"tool_name": "Write", "cwd": REPO, "tool_input": {"file_path": os.path.join(REPO, "src", "a.py")}}
+        assert parse_tool_result.change_report(pl) == (["code"], [])
+    finally:
+        parse_tool_result._relative = real

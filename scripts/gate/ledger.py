@@ -44,8 +44,9 @@ DEFAULT_LEDGER: dict[str, Any] = {
     "last_updated": "",
 }
 
+_KEY_VALUE = re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['\"]?[^'\"\s]+")
 SECRET_PATTERNS = [
-    re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['\"]?[^'\"\s]+"),
+    _KEY_VALUE,
     # Unanchored, as on main: `key%3Dsk-proj-…` and `\nsk-…` must still be caught.
     re.compile(r"sk-[A-Za-z0-9_-]{12,}"),
     re.compile(r"gh[pousr]_[A-Za-z0-9_]{12,}"),
@@ -62,7 +63,7 @@ SECRET_PATTERNS += [_URL_USERINFO, _AWS_KEY_ID]
 # For a FILE PATH shown to the model: the token patterns above match inside
 # ordinary names (`disk-usage-monitor.ts` -> `di[REDACTED].ts`), so a path gets
 # only the forms that can occur in one.
-PATH_SECRET_PATTERNS = [SECRET_PATTERNS[0], _URL_USERINFO, _AWS_KEY_ID]
+PATH_SECRET_PATTERNS = [_KEY_VALUE, _URL_USERINFO, _AWS_KEY_ID]
 
 CODE_EXTS = {
     ".c", ".cc", ".cpp", ".cs", ".css", ".go", ".java", ".js", ".jsx", ".kt",

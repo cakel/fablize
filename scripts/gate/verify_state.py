@@ -114,12 +114,13 @@ def _gap(ledger: dict[str, Any]) -> tuple[bool, str]:
             # "if a write is not part of this project ... those do not count" as "a
             # fixture outside the project does not count" and stopped on that claim.
             return True, (f"{VOIDED_REASON} (latest: "
-                          f"`{ledger['last_change']}`); a write outside this project counts too. "
+                          f"`{ledger['last_change']}`); a write outside this project counts too, "
+                          "unless it is in a temp folder. "
                           "Re-run the narrowest check that covers it, or, if a check you wrote "
                           "verifies it, run that check as check_<what> or verify_<what> "
-                          "(.py/.sh/.ps1) so the gate sees it. Only writes in your session scratchpad "
-                          "or under a path that begins literally with /tmp/ in Bash or $env:TEMP\\ in "
-                          "PowerShell are not counted: keep fixture and scratch files there. " + tail)
+                          "(.py/.sh/.ps1) so the gate sees it. Keep fixture and scratch files in "
+                          "your session scratchpad or under a path that begins literally with /tmp/ "
+                          "in Bash or $env:TEMP\\ in PowerShell: writes there are not counted. " + tail)
         return True, ("fablize gate: run the narrowest verification command for the changed behavior "
                       "before the final response. " + tail)
     # deep-only: normal mode no longer hard-blocks; it keeps an advisory prompt nudge.

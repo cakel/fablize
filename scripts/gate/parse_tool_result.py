@@ -1205,13 +1205,16 @@ def change_report(input_data: dict[str, Any]) -> tuple[list[str], list[str]]:
     if tool_name in SHELL_TOOLS:
         return kinds, []
     project = str(input_data.get("cwd") or "") or None
-    names = [_relative(raw, project) for raw, kind in classified if kind != "docs" and raw != "edit"]
-    if not names and tool_name == "NotebookEdit":
-        tool_input = input_data.get("tool_input") if isinstance(input_data.get("tool_input"), dict) else {}
-        notebook = str(tool_input.get("notebook_path") or "")
-        # A temp notebook still counts (as on main), but naming it next to "keep such
-        # files in temp" advice would be self-contradictory.
-        names = [_relative(notebook, project)] if notebook and not is_scratch(notebook, project) else []
+    try:  # naming is cosmetic: it must never cost the gate the kinds above
+        names = [_relative(raw, project) for raw, kind in classified if kind != "docs" and raw != "edit"]
+        if not names and tool_name == "NotebookEdit":
+            tool_input = input_data.get("tool_input") if isinstance(input_data.get("tool_input"), dict) else {}
+            notebook = str(tool_input.get("notebook_path") or "")
+            # A temp notebook still counts (as on main), but naming it next to "keep such
+            # files in temp" advice would be self-contradictory.
+            names = [_relative(notebook, project)] if notebook and not is_scratch(notebook, project) else []
+    except Exception:  # noqa: BLE001
+        names = []
     return kinds, list(dict.fromkeys(names))
 
 

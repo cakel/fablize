@@ -27,7 +27,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
   nine red-team rounds kept finding names read back out of a command wrong or leaking
   (a sed script read as a file, `s/OLD/hunter2/`; `$(curl -u user:pw …)` inside a redirect
   target; `out/${TOKEN}.json`; half-tokens; `cp -t`'s untouched source; paths relative to
-  a `cd`). The holdout log records the reason's class, not its paths.
+  a `cd`). The holdout log records the reason's class, not its paths, and each
+  `stop_block` event records it (`voided` / `plain`) so the wording's effect can be measured.
+  Naming never costs the gate a change: an error while naming falls back to the generic label.
   (`tests/test_gate_block_reason.py`)
 - **Redaction also covers URL credentials (`https://user:pass@host`, `token@host`, a
   password with `@`, `?` or `#`, quoted or followed by punctuation) and AWS key ids.** An
