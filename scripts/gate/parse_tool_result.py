@@ -792,7 +792,8 @@ _PY_WRITE_RE = re.compile(
 # 'margin:0;zoom:0.55' or a format string is not read as a file name.
 _PY_PATH_LIT_RE = re.compile(r"""['"]((?:[A-Za-z]:)?[^'"\n;:{}<>=*?|]{1,200}?\.[A-Za-z][A-Za-z0-9]{0,7})['"]""")
 # A bare `raise SystemExit` exits 0; one with a nonzero code or a message exits 1.
-_PY_ASSERT_RE = re.compile(r"(?m)^\s*assert\b|SystemExit\(\s*(?:[1-9]|['\"f])|sys\.exit\(\s*(?:[1-9]|['\"f])")
+# `assert` opens a line or follows `;` (`python -c "import m; assert m.f() == 2"`).
+_PY_ASSERT_RE = re.compile(r"(?m)(?:^|;)\s*assert\b|SystemExit\(\s*(?:[1-9]|['\"f])|sys\.exit\(\s*(?:[1-9]|['\"f])")
 _PY_C_RE = re.compile(r"""(?i)\b(?:python[0-9.]*|py)(?:\.exe)?\s+(?:-[A-Za-z]+\s+)*-c\s+(?:"((?:[^"\\]|\\.)*)"|'([^']*)')""", re.S)
 
 
