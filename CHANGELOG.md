@@ -5,6 +5,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
 
 ## [Unreleased]
 
+### Added
+
+- **`tests/e2e/kiro_linux_e2e.sh`**: fablize on Kiro CLI end to end on a Linux host —
+  `setup/kiro.py global`, the agent's hook commands run through `sh -c` with Kiro v2/v3
+  payloads, live `kiro-cli chat --agent fablize` sessions checked through the hooks' own
+  records, then uninstall. Run on Ubuntu 24.04 with kiro-cli 2.37.1 (v2 engine there).
+  Not run in CI: it needs a logged-in kiro-cli.
+
+### Fixed
+
+- **A one-line `python -c "…; assert …"` counts as a check.** `assert` only matched at
+  the start of a line, so `python3 -c "from m import f; assert f() == 2"` — the form
+  models write most — was no check, and a deep turn that did verify was blocked to the
+  cap (seen in a live Kiro run on Linux). An edit script's `; assert` precondition and a
+  print-only `python -c` still do not count. `docs/DECISIONS.md` D2/D4/D6 carry the
+  2026-11-03 review of the recorded gate events.
+
 ## [2.1.1+cakel.13] — 2026-11-03
 
 ### Fixed

@@ -98,6 +98,21 @@ to see what the model was doing when the gate fired.
     expected it to block (false ban), or `stop_user_forbade` sessions show the model
     skipping a check the user did ask for. A heavier fix (a model call, or dropping the
     matcher and relying on the block-reason text alone) is the next step, not more regex.
+  - **2026-11-03 review (one user, Windows, Claude Code, events 2026-10-26 → 11-03):** 81
+    sessions, 343 `router_signal`, 4 `stop_block` in 3 sessions, 0 `stop_cap_warning`: the
+    revisit threshold (cap warnings > ~1/3 of blocks) is not met. Two transcripts read
+    (webos-auto-loop 10-29, kiro-skill 11-02): each block came after work that had been
+    checked once earlier, cost one extra turn, and the model's re-run passed. Neither was
+    a block loop, neither a clear false block.
+  - **2026-11-03 Kiro e2e (Linux, kiro-cli 2.37.1, v2 engine, `tests/e2e/kiro_linux_e2e.sh`):**
+    2 of 3 live sessions reached the cap. One was a classifier miss:
+    `python3 -c "from stats import mean; assert …"` did not count because `assert` only
+    matched at a line start — fixed (`_PY_ASSERT_RE` accepts `; assert`). The other model's
+    only check was a print-only `python3 -c`, which stays "no check" by design. In the
+    first session the model told the user "Verified" after a check that exited 1 —
+    the block was right there.
+  - **Status after the review:** stays (c), deep blocks / normal advises. No change to
+    blocking vs advisory; the recorded cap hits trace to the classifier, not to the policy.
 
 ## D3. Re-measure effect with harder tasks and a clean baseline
 
@@ -110,6 +125,27 @@ to see what the model was doing when the gate fired.
   hidden tests as the outcome; ≥ 5 runs per arm per model.
 - **Current state:** not run. Fixtures from the first attempt are throwaway (session scratchpad).
 - **Revisit when:** before any README effect claim is kept or added (D1).
+- **2026-11-03 pilot (baseline arm only, calibration):** three planted-bug tasks, each with
+  a visible failing test and hidden tests that a surface fix fails (checked: the correct
+  fix passes visible + hidden, a shallow fix passes visible and fails hidden):
+  T1 wrong report total whose cause is a shared parser also used by a sibling (`/100` for
+  any fraction length); T2 order-dependent wrong default whose cause is `load()` mutating
+  module defaults, where a shallow copy is not enough (nested dict); T3 a helper
+  documented 1-based but 0-based, with two sibling callers compensating for it.
+  Sonnet, clean baseline, 2 runs each: **6/6 hidden-test passes**, 15-22 s and
+  about $0.08 a run, sibling callers fixed every time. The tasks are at the ceiling; a full
+  run with them would repeat the 10-24 result. **Not run further.**
+- **What the pilot settled for the next attempt:**
+  - Clean baseline: `CLAUDE_CONFIG_DIR=<empty dir>` plus a one-time `claude auth login`
+    there (`--bare` takes only `ANTHROPIC_API_KEY`). The workspace must sit **outside the
+    home folder**: CLAUDE.md discovery walks up from the cwd, and a cwd under
+    `C:/Users/<you>` loaded `~/.claude/CLAUDE.md` (fablize block included) even with a
+    clean config dir. Probe each setup by asking the model whether its context mentions
+    CLAUDE.md or fablize before any run.
+  - Single-module planted bugs of this size are too easy for current models. A useful
+    task needs a symptom far from its cause across many files, or an environment the
+    model must observe (a running process, a flaky timing, a renderer), not a bug a
+    10-turn read of a few small files can find.
 
 ## D4. Register finish-the-work.sh by default?
 
@@ -125,6 +161,9 @@ to see what the model was doing when the gate fired.
   is a false positive.
 - **Options:** (a) keep manual; (b) register in hooks.json; (c) drop it.
 - **Revisit when:** there are enough `ftw_block` events to estimate the false-positive share.
+- **2026-11-03:** 0 `ftw_block` events (the hook is not registered on the one machine with
+  data), so the share cannot be estimated. Stays (a), manual. Getting data needs someone
+  to register it by hand per `docs/GUIDE.md`; until then this entry cannot move.
 
 ## D5. goals.py runs the verify command itself
 
@@ -150,3 +189,6 @@ to see what the model was doing when the gate fired.
 - **Risk:** interrupts an urgent task. **Revisit when:** a user complains, or upstream changes the flow.
 - **Observation (2026-10-26 smoke):** `/fablize:fablize <task>` on a fresh PC asked the scope,
   ran setup, asked the star question, then did the task — two questions before any work.
+- **2026-11-03:** no user complaint and no upstream change; the revisit condition is not
+  met. `/fablize:setup` (explicit, not inline with a task) asked only the scope; the star
+  question was skipped because it had been asked before (`setup.sh ask` printed nothing).
