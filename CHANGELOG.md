@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
 
 ## [Unreleased]
 
+## [2.1.1+cakel.12] — 2026-11-03
+
 ### Fixed
 
 - **setup.sh no longer needs `touch`.** It created a missing CLAUDE.md with `touch`, and
