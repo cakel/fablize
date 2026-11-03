@@ -130,7 +130,7 @@ Kiro에는 Claude Code 플러그인 체계가 없어서 `hooks/hooks.json`이 �
 | 파일 도구 | `write` | `fs_write`, `str_replace`, `fs_append` |
 | 셸 결과 | JSON, `exit_status: "exit code: N"` | `Exit Code: N`로 끝나는 텍스트 |
 
-kiro-cli 2.33(v2)과 KiroCLI 2.37.1(v3), Windows에서 bash를 PATH에서 뺀 상태로 확인했습니다. Claude Code와 다른 점:
+kiro-cli 2.33(v2)과 KiroCLI 2.37.1(v3), Windows에서 bash를 PATH에서 뺀 상태로 확인했습니다. Linux(Ubuntu 24.04, `tests/e2e/kiro_linux_e2e.sh`, 2026-11-03)에서는 같은 kiro-cli 2.37.1이 **v2** 엔진으로 돌았습니다. 셸 도구 이름은 `shell`이고 결과는 `exit status: N`으로 나오며, stop 훅은 막을 때마다 다시 불렸습니다(두 번 막은 뒤 미검증 경고). OS마다 한 번씩만 관찰한 결과이고 엔진이 무엇으로 정해지는지는 모르므로, 어느 호스트에서든 두 엔진 모두 나올 수 있다고 보세요. Claude Code와 다른 점:
 
 - 에이전트 파일에 `resources` 필드를 일부러 넣지 않았습니다. 이 필드가 없는 커스텀 에이전트도 두 엔진 모두에서 workspace와 전역 steering을 전부 읽었고, workspace와 전역 skill 목록도 보았습니다(표식 단어로 확인). 여기에 다시 나열하면 steering이 컨텍스트에 두 번 들어갈 수 있습니다.
 - Kiro는 `postToolUse` 출력을 아무에게도 보여 주지 않아서 "같은 실패 반복" 알림이 모델에 닿지 않습니다. 끝내기 전 확인은 변경과 검사를 그대로 봅니다.

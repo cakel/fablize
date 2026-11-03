@@ -130,7 +130,7 @@ A file it would replace that it did not write is kept as `*.fablize-bak.<time>`.
 | File tools | `write` | `fs_write`, `str_replace`, `fs_append` |
 | Shell result | JSON, `exit_status: "exit code: N"` | text ending `Exit Code: N` |
 
-Observed with kiro-cli 2.33 (v2) and KiroCLI 2.37.1 (v3) on Windows, with bash removed from PATH. What differs from Claude Code:
+Observed with kiro-cli 2.33 (v2) and KiroCLI 2.37.1 (v3) on Windows, with bash removed from PATH. On Linux (Ubuntu 24.04, `tests/e2e/kiro_linux_e2e.sh`, 2026-11-03), the same kiro-cli 2.37.1 ran the **v2** engine: the shell tool is `shell`, its result reads `exit status: N`, and the stop hook ran again after each block (two blocks, then the unverified warning). One observation per OS; what picks the engine is not known, so expect either on any host. What differs from Claude Code:
 
 - The agent file has no `resources` field on purpose: a custom agent without one still loaded workspace and global steering in full and listed workspace and global skills, on both engines (probed with a marker word). Listing them again could put the steering in context twice.
 - Kiro shows `postToolUse` output to nobody, so the "the same failure repeated" note never reaches the model. The stop check still sees every change and check.
