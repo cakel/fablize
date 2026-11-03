@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
 
 ## [Unreleased]
 
+## [2.1.1+cakel.11] — 2026-11-03
+
 ### Added
 
 - **Kiro: an unverified end is carried to the next prompt.** Kiro v3 runs the stop hook
