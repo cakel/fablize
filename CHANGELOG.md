@@ -5,6 +5,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
 
 ## [Unreleased]
 
+### Fixed
+
+- **setup.sh no longer needs `touch`.** It created a missing CLAUDE.md with `touch`, and
+  on a managed Windows machine that blocks touch.exe setup died at that line
+  (`/usr/bin/touch: Permission denied`) before backing up or writing anything. It now uses
+  the shell redirection `: >>`, which creates the file without an external binary and leaves
+  an existing one unchanged. `tests/test_setup_paths.py` runs setup with a `touch` that always
+  fails placed first on PATH.
+
 ## [2.1.1+cakel.11] — 2026-11-03
 
 ### Added
