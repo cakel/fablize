@@ -70,6 +70,9 @@ def should_block_stop(ledger: dict[str, Any]) -> tuple[bool, str]:
 # The fixed head of the "voided check" reason. gate_stop logs this, not the full
 # reason, to the holdout events: the rest names project paths.
 VOIDED_REASON = "fablize gate: a change was recorded after the last check"
+# The reason's last clause. A host that runs the stop hook once (Kiro v3) swaps it
+# out (hooks/kiro.py), so the model is not told "twice" and "once" together.
+REPEAT_NOTE = "this reminder repeats at most twice, then the turn ends with an unverified warning to the user."
 
 
 def _gap(ledger: dict[str, Any]) -> tuple[bool, str]:
@@ -94,8 +97,7 @@ def _gap(ledger: dict[str, Any]) -> tuple[bool, str]:
         # The user's ban outranks the gate even when the prompt matcher missed it
         # ("테스트 돌릴 필요 없어"): the model may answer the block by saying so.
         tail = ("If none can run, or the user said not to run tests/commands, do not run them; "
-                "say so in the final response — this reminder repeats at most twice, then the turn "
-                "ends with an unverified warning to the user.")
+                "say so in the final response — " + REPEAT_NOTE)
         results = ledger.get("verification_results") or []
         if results and results[-1].get("success") is not False and ledger.get("last_change"):
             # A passing check was voided by a later change. Saying which one and how

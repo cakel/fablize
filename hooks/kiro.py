@@ -33,6 +33,7 @@ from pathlib import Path
 
 HOOKS = Path(__file__).resolve().parent
 sys.path.insert(0, str(HOOKS))
+sys.path.insert(0, str(HOOKS.parent / "scripts" / "gate"))  # carried_gap; the gates add it too
 WRITE_TOOLS = {"write", "fs_write", "fs_append", "str_replace"}
 # v2 `shell` is PowerShell on Windows, bash elsewhere; v3 names the shell. The gate
 # parses both labels the same way; the label only keeps the record honest.
@@ -83,25 +84,42 @@ def carried_gap(payload: dict) -> str:
     SessionEnd is session teardown, not a turn end. So a turn can end with a change
     no check covered and no warning. The prompt hook's stdout does reach the model:
     read the ledger before gate_prompt resets it, and have the model say so first.
-    Any error -> "" (fail open)."""
+    Only with a session id: without one the ledger is keyed on cwd, and a new session
+    in that directory would hear about another session's turn. Not in the holdout's
+    'off' arm, which gets no gate output. Any error -> "" (fail open)."""
     try:
-        sys.path.insert(0, str(HOOKS.parent / "scripts" / "gate"))
+        if not payload.get("session_id"):
+            return ""
+        from gate_stop import _holdout_suppresses
         from ledger import load_ledger
         from verify_state import should_block_stop, warning_after_max_blocks
+        if _holdout_suppresses(payload):
+            return ""
         ledger = load_ledger(payload)
         if not (should_block_stop(ledger)[0] or warning_after_max_blocks(ledger)):
             return ""
+        try:  # measurement, as gate_stop logs its own warnings (docs/DECISIONS.md D2)
+            from shadow_logger import log_event
+            log_event(payload["session_id"], "kiro_carried_gap", {"mode": ledger.get("task_mode"),
+                      "stop_blocks": int(ledger.get("stop_blocks") or 0),
+                      "verify_forbidden": ledger.get("verify_forbidden") is True})
+        except Exception:  # noqa: BLE001
+            pass
         latest = str(ledger.get("last_change") or "") or "a change"
+        # The user's "don't run tests" outlives the turn (gate_prompt keeps it while the
+        # prompt does not lift it): then only report, never push for a check.
+        verify = ("" if ledger.get("verify_forbidden") is True
+                  else ", and verify it if this prompt continues the same work")
         return (f"fablize gate: the previous turn ended with a change that no observed check covered "
-                f"(latest: `{latest}`). Tell the user that in one line before anything else, and "
-                "verify it if this prompt continues the same work.")
+                f"(latest: `{latest}`). Tell the user that in one line before anything else{verify}.")
     except Exception:  # noqa: BLE001
         return ""
 
 
-# Said only where the stop hook runs once per prompt. The v3 Stop payload has no
-# assistant_response (v2 sends it on every call), which is how that is told apart.
-ONE_SHOT = (" On this host this reminder comes once, not twice: the next time you stop, the "
+# Replaces the reason's "repeats at most twice" clause where the stop hook runs once
+# per prompt. v3 sends hook_event_name "Stop" (its payload builder in acp-server.js
+# sets it; probe: v3 "Stop", v2 "stop" with an assistant_response).
+ONE_SHOT = ("on this host this reminder comes once, not twice: the next time you stop, the "
             "turn ends, unverified unless a check ran.")
 
 
@@ -198,7 +216,10 @@ def main(event: str, data: dict) -> str:
         payload["last_assistant_message"] = str(data.get("assistant_response") or "")
         result = gate("gate_stop", payload)
         if result.get("decision") == "block":
-            reason = str(result.get("reason") or "") + ("" if "assistant_response" in data else ONE_SHOT)
+            reason = str(result.get("reason") or "")
+            if data.get("hook_event_name") == "Stop":  # v3: one stop hook run per prompt
+                from verify_state import REPEAT_NOTE
+                reason = reason.replace(REPEAT_NOTE, ONE_SHOT)
             return json.dumps({"decision": "block", "reason": reason}, ensure_ascii=True)
         if result.get("systemMessage"):
             sys.stderr.write(str(result["systemMessage"]) + "\n")

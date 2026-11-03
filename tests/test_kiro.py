@@ -185,9 +185,11 @@ def test_v3_block_says_it_comes_once_v2_does_not():
     data = tempfile.mkdtemp(prefix="fz_kiro_data_")
     run("prompt", prompt("o1", DEEP), data)
     run("post", v3_write("o1", "src/auth.py"), data)
-    v3 = json.loads(run("stop", v3_stop("o1"), data))["reason"]
-    v2 = json.loads(run("stop", stop("o1"), data))["reason"]
+    v3, v2 = json.loads(run("stop", v3_stop("o1"), data)), json.loads(run("stop", stop("o1"), data))
+    assert v3["decision"] == v2["decision"] == "block"  # both within MAX_STOP_BLOCKS
+    v3, v2 = v3["reason"], v2["reason"]
     assert "comes once, not twice" in v3 and "comes once" not in v2
+    assert "repeats at most twice" not in v3 and "repeats at most twice" in v2  # replaced, not appended
 
 
 def test_unverified_end_is_carried_to_the_next_prompt_once():
@@ -219,3 +221,40 @@ def test_v2_capped_end_is_carried_too():
     for _ in range(3):  # block, block, then the cap lets it through with a warning
         run("stop", stop("c5"), data)
     assert "previous turn ended" in run("prompt", prompt("c5", "next"), data)
+
+
+def test_carried_note_never_pushes_a_check_the_user_ruled_out():
+    data = tempfile.mkdtemp(prefix="fz_kiro_data_")
+    run("prompt", prompt("f1", DEEP + ". Do not run any tests."), data)
+    run("post", v3_write("f1", "src/auth.py"), data)
+    run("stop", v3_stop("f1"), data)
+    nxt = run("prompt", prompt("f1", "ok, go on"), data)
+    assert "previous turn ended" in nxt and "verify it" not in nxt
+
+
+def test_no_carried_note_without_a_session_or_in_the_holdout_off_arm():
+    data = tempfile.mkdtemp(prefix="fz_kiro_data_")
+    run("prompt", prompt("", DEEP), data)  # no session id: the ledger is keyed on cwd
+    run("post", v3_write("", "src/auth.py"), data)
+    assert "previous turn ended" not in run("prompt", prompt("", "hello"), data)
+    sys.path.insert(0, str(ADAPTER.parent.parent / "scripts" / "shadow"))
+    from shadow_logger import holdout_arm
+    sid = next(f"h{i}" for i in range(500) if holdout_arm(f"h{i}") == "off")
+    env = dict(os.environ, FABLIZE_DATA=data, PYTHONUTF8="1", FABLIZE_HOLDOUT="1")
+    def held(event, payload):
+        return subprocess.run([sys.executable, str(ADAPTER), event], input=json.dumps(payload).encode(),
+                              capture_output=True, env=env, timeout=60).stdout.decode("utf-8")
+    held("prompt", prompt(sid, DEEP))
+    held("post", v3_write(sid, "src/auth.py"))
+    assert held("stop", v3_stop(sid)).strip() == ""  # the off arm: no gate output
+    assert "previous turn ended" not in held("prompt", prompt(sid, "next"))
+
+
+def test_carried_note_is_logged_for_measurement():
+    data = tempfile.mkdtemp(prefix="fz_kiro_data_")
+    run("prompt", prompt("e1", DEEP), data)
+    run("post", v3_write("e1", "src/auth.py"), data)
+    run("stop", v3_stop("e1"), data)
+    run("prompt", prompt("e1", "next"), data)
+    events = Path(data, "history", "events.jsonl").read_text(encoding="utf-8")
+    assert '"kiro_carried_gap"' in events and "auth.py" not in events
