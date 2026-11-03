@@ -173,3 +173,49 @@ def test_v2_text_item_result_is_read():
     p["tool_response"] = {"items": [{"Text": "exit code: 1\n1 failed, 3 passed"}]}
     _, out = turn("r4", write("r4", "src/auth.py"), p)
     assert json.loads(out)["decision"] == "block"
+
+
+# v3 runs the stop hook once per prompt (2.37.1 probe: v2 3 calls, v3 1). Its one
+# block says so, and an unverified end is carried to the next prompt.
+def v3_stop(sid):
+    return {"hook_event_name": "Stop", "cwd": CWD, "session_id": sid}
+
+
+def test_v3_block_says_it_comes_once_v2_does_not():
+    data = tempfile.mkdtemp(prefix="fz_kiro_data_")
+    run("prompt", prompt("o1", DEEP), data)
+    run("post", v3_write("o1", "src/auth.py"), data)
+    v3 = json.loads(run("stop", v3_stop("o1"), data))["reason"]
+    v2 = json.loads(run("stop", stop("o1"), data))["reason"]
+    assert "comes once, not twice" in v3 and "comes once" not in v2
+
+
+def test_unverified_end_is_carried_to_the_next_prompt_once():
+    data = tempfile.mkdtemp(prefix="fz_kiro_data_")
+    run("prompt", prompt("c1", DEEP), data)
+    run("post", v3_write("c1", "src/auth.py"), data)
+    assert json.loads(run("stop", v3_stop("c1"), data))["decision"] == "block"  # the one v3 block
+    nxt = run("prompt", prompt("c1", "thanks"), data)  # v3 ended the turn there
+    assert "previous turn ended" in nxt and "src/auth.py" in nxt
+    assert "previous turn ended" not in run("prompt", prompt("c1", "next"), data)  # said once
+
+
+def test_verified_or_other_session_end_carries_nothing():
+    data = tempfile.mkdtemp(prefix="fz_kiro_data_")
+    run("prompt", prompt("c2", DEEP), data)
+    run("post", v3_write("c2", "src/auth.py"), data)
+    run("post", v3_shell("c2", "python -m pytest -q", 0, "3 passed in 0.1s"), data)
+    assert run("stop", v3_stop("c2"), data) == ""
+    assert "previous turn ended" not in run("prompt", prompt("c2", "next"), data)
+    run("prompt", prompt("c3", DEEP), data)
+    run("post", v3_write("c3", "src/auth.py"), data)
+    assert "previous turn ended" not in run("prompt", prompt("c4", "hello"), data)  # another session
+
+
+def test_v2_capped_end_is_carried_too():
+    data = tempfile.mkdtemp(prefix="fz_kiro_data_")
+    run("prompt", prompt("c5", DEEP), data)
+    run("post", write("c5", "src/auth.py"), data)
+    for _ in range(3):  # block, block, then the cap lets it through with a warning
+        run("stop", stop("c5"), data)
+    assert "previous turn ended" in run("prompt", prompt("c5", "next"), data)

@@ -5,6 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
 
 ## [Unreleased]
 
+### Added
+
+- **Kiro: an unverified end is carried to the next prompt.** Kiro v3 runs the stop hook
+  once per prompt (`acp-server.js` skips agentStop hooks once `onAgentStopHooksExecuted`
+  is set), and after that one block nothing reaches the model or the user: postToolUse
+  stdout, hook stderr and failing hooks are shown to neither, and SessionEnd is session
+  teardown. So `hooks/kiro.py` reads the ledger at the next prompt, before it is reset,
+  and when the previous turn ended with a change no check covered, tells the model to
+  say so to the user first. On v3 (its Stop payload has no `assistant_response`) the one
+  block also says it comes once, not twice. Real v3 sessions, two prompts each with
+  `--resume`: after a "don't run tests" turn the next reply began "Previous change to
+  `test_calc.py` … was never verified"; after a fixture turn the model answered the note
+  (it had read the fixture back with `Get-Content`, which the gate does not count).
+  (`tests/test_kiro.py`)
+
 ## [2.1.1+cakel.10] — 2026-11-03
 
 ### Fixed
