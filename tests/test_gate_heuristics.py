@@ -204,6 +204,15 @@ edit_with_assert = "python - <<'PY'\np='src/a.py'; s=open(p).read()\nassert 'old
 check("an edit script's assert is not a verification", is_verification_command(edit_with_assert), False)
 check("a read-only inline assert IS a verification",
       is_verification_command("python - <<'EOF'\nimport docx\nd = docx.Document('out.docx')\nassert len(d.paragraphs) > 10\nEOF"), True)
+# Kiro e2e 2026-11-03: `python3 -c "from m import f; assert f() == 2"` — the one-line
+# form models write most — was no check (assert only matched at a line start), so a
+# deep turn that did verify was blocked to the cap.
+check("a one-line `python -c \"…; assert …\"` IS a verification",
+      is_verification_command('python3 -c "from stats import mean; assert mean([1,2,3]) == 2.0; print(1)"'), True)
+check("a one-line edit script's `; assert` is still not a verification",
+      is_verification_command("python -c \"p='src/a.py'; s=open(p).read(); assert 'old' in s; open(p,'w').write(s)\""), False)
+check("a print-only `python -c` is still not a verification",
+      is_verification_command("python3 -c \"from slugify import slugify; print(slugify('A b'))\""), False)
 check("multi-line commit message arrow is not a redirect",
       bash('git commit -q -m "refactor: split\n\n- parse() -> tokenize()"'), [])
 check("scratch via a variable is no change", bash(f'S="{SP}"; cat > "$S/probe.py" <<EOF\nprint(1)\nEOF'), [])
