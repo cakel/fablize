@@ -26,6 +26,7 @@ sys.path.insert(0, str(HOOKS.parent / "scripts" / "gate"))
 
 import parse_tool_result  # noqa: E402
 from ledger import redact  # noqa: E402
+from verify_state import REPEAT_NOTE  # noqa: E402
 
 AFTER = "recorded after the last check"
 
@@ -99,6 +100,14 @@ def test_failed_latest_check_keeps_the_plain_reason():
 def test_no_check_at_all_keeps_the_plain_reason():
     result = run_turn(EDIT)
     assert result.get("decision") == "block" and AFTER not in result["reason"]
+
+
+def test_plain_reason_says_how_a_check_is_seen():
+    # Observed 2026-11-06: the plain block named no recognised form, so ad-hoc checks
+    # were re-run unseen until the cap. Wording only; what is gated is unchanged.
+    reason = run_turn(EDIT)["reason"]
+    assert "check_<what>" in reason and "ad-hoc command" in reason
+    assert reason.endswith(REPEAT_NOTE)  # hooks/kiro.py swaps this tail; it must stay last
 
 
 def test_named_check_after_the_fixture_releases_the_gate():
