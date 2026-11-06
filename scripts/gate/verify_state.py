@@ -123,8 +123,15 @@ def _gap(ledger: dict[str, Any]) -> tuple[bool, str]:
                           "(.py/.sh/.ps1) so the gate sees it. Keep fixture and scratch files in "
                           "your session scratchpad or under a path that begins literally with /tmp/ "
                           "in Bash or $env:TEMP\\ in PowerShell: writes there are not counted. " + tail)
+        # How a check is SEEN, said on the first block too. Observed 2026-11-06: told only
+        # "run a verification command", the model re-ran the same ad-hoc checks (a pipe
+        # into the changed hook, `python -c "json.load(...)"`, the changed command
+        # itself) twice; none was recognised, so a verified turn hit the cap.
         return True, ("fablize gate: run the narrowest verification command for the changed behavior "
-                      "before the final response. " + tail)
+                      "before the final response. The gate counts a test runner (pytest, npm test, ...) "
+                      "or a script named check_<what> / verify_<what> (.py/.sh/.ps1); an ad-hoc command "
+                      "(running the changed thing, piping into it, `python -c` without assert) is not "
+                      "seen, so put such a check in a check_<what> script and run that. " + tail)
     # deep-only: normal mode no longer hard-blocks; it keeps an advisory prompt nudge.
     return False, ""
 

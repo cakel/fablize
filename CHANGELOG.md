@@ -21,6 +21,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
   cap (seen in a live Kiro run on Linux). An edit script's `; assert` precondition and a
   print-only `python -c` still do not count. `docs/DECISIONS.md` D2/D4/D6 carry the
   2026-11-03 review of the recorded gate events.
+- **The first Stop block says how a check is seen.** It said only "run the narrowest
+  verification command", so a turn that had verified with ad-hoc commands (a pipe into
+  the changed hook, `python -c "json.load(…)"`) re-ran them unseen and hit the cap. It
+  now names what counts (a test runner, or a `check_<what>`/`verify_<what>` script) and
+  what does not. Wording only: what is gated is unchanged.
 
 ## [2.1.1+cakel.13] — 2026-11-03
 
