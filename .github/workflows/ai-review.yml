@@ -1,0 +1,23 @@
+name: AI PR Code Review
+
+# Public repo: precheck runs on a GitHub-hosted runner and blocks fork PRs and
+# non-collaborators before anything reaches the self-hosted review runner.
+# No issue_comment trigger, so only same-repo PRs get reviewed.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+
+jobs:
+  ai-review:
+    uses: cakel/llm-pr-reviewer/.github/workflows/reusable-ai-review.yml@0cb48b93bc0084553a71a05d9997af334eacd25c  # v1.2.1
+    with:
+      runner: '["ubuntu-latest"]'
+      review-runner: '["self-hosted", "review"]'
+      max-diff-bytes: '500000'
+    secrets:
+      token: ${{ secrets.GITHUB_TOKEN }}
