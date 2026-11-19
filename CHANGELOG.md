@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
 
 ## [Unreleased]
 
+## [2.1.1+cakel.15] — 2026-11-19
+
 ### Fixed
 
 - **setup / uninstall keep the user's text inside the FABLIZE markers.** setup.sh
