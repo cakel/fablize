@@ -365,19 +365,25 @@ check("python goals.py (no py.sh) is recognised too",
            "fablize: verify-cmd exit 0 (observed by goals.py)") or {}).get("success"), True)
 
 
-def _goals_marker_live():
-    """The real goals.py prints the verdict as its LAST line, so `| tail -n 1` keeps it."""
+def _goals_live(code):
+    """Run the real goals.py final checkpoint with a verify command exiting `code`.
+    Returns (last stdout line, verification_record success for its real stdout+stderr)."""
     with tempfile.TemporaryDirectory() as d:
         g = [sys.executable, str(REPO / "scripts" / "goals.py")]
         run = lambda *a: subprocess.run(g + list(a), cwd=d, capture_output=True, text=True, encoding="utf-8")
         run("create", "--brief", "b", "--goal", "only::o")
         run("next")
-        out = run("checkpoint", "--id", "G001", "--status", "complete", "--evidence", "e",
-                  "--verify-cmd", f'"{sys.executable}" -c "pass"').stdout
-        return out.strip().splitlines()[-1] if out.strip() else ""
+        p = run("checkpoint", "--id", "G001", "--status", "complete", "--evidence", "e",
+                "--verify-cmd", f'"{sys.executable}" -c "import sys; sys.exit({code})"')
+        last = p.stdout.strip().splitlines()[-1] if p.stdout.strip() else ""
+        rec = _GV('python scripts/goals.py checkpoint --id G001 --status complete --evidence e --verify-cmd "x"',
+                  p.stdout + p.stderr) or {}
+        return last, rec.get("success")
 
 
-check("goals.py prints the verdict line last", _goals_marker_live(), "fablize: verify-cmd exit 0 (observed by goals.py)")
+check("real goals.py: verdict line is last and records a pass", _goals_live(0),
+      ("fablize: verify-cmd exit 0 (observed by goals.py)", True))
+check("real goals.py: a failing verify-cmd's own exit text records a failure", _goals_live(3)[1], False)
 
 
 # --- a python SCRIPT that writes the files it is handed (seen 2026-11-19: edits recorded as no change) ---
