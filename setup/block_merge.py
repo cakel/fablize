@@ -21,11 +21,16 @@ Now:
     template version has had (setup/fablize-block.md history).
   - A second, duplicated block is dropped the same way (its foreign lines kept).
 """
+from __future__ import annotations  # `tuple[str, int]` annotations on Python 3.8
+
 import pathlib
 import re
 import sys
 
 BLOCK_RE = re.compile(r"<!-- FABLIZE:BEGIN.*?FABLIZE:END -->[ \t]*\n?", re.S)
+# remove(): the blank lines just before a block go with it (as uninstall.sh always did),
+# and nothing else in the file is normalised.
+_REMOVE_RE = re.compile(r"\n*" + BLOCK_RE.pattern, re.S)
 _OWNED_RE = re.compile(
     r"^(?:<!-- FABLIZE:(?:BEGIN|END)\b|## Operating mode\b|Apply what the task signals\b|- \*\*\[)")
 
@@ -77,14 +82,24 @@ def remove(cur: str) -> tuple[str, int, bool]:
         nonlocal kept
         own = foreign_text(m.group(0))
         kept += _count(own)
-        return (own + "\n") if own else ""
+        # Only the block's own span changes: one separating newline (the old
+        # uninstall.sh behaviour), plus the user's lines when there were any.
+        return ("\n\n" + own + "\n") if own else "\n"
 
-    new = BLOCK_RE.sub(repl, cur)
-    new = re.sub(r"\n{3,}", "\n\n", new)
-    return (new.rstrip("\n") + "\n") if new.strip() else "", kept, found
+    new = _REMOVE_RE.sub(repl, cur)
+    if new.startswith("\n") and not cur.startswith("\n"):
+        new = new.lstrip("\n")  # the block opened the file
+    return new, kept, found
 
 
 def main(argv: list) -> int:
+    # setup.sh pipes this; a Windows console/pipe codepage (cp1252, cp949) cannot
+    # print ✓ and the message would die after the file was already written.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     if len(argv) >= 2 and argv[0] == "inject" and len(argv) == 4:
         p = pathlib.Path(argv[1])
         cur = p.read_text(encoding="utf-8") if p.exists() else ""

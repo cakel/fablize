@@ -2,6 +2,7 @@
 """setup/block_merge.py keeps the user's text when the FABLIZE block is replaced or
 removed. Exit non-zero on any mismatch (script form is canonical, pytest runs it too)."""
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -56,18 +57,25 @@ check("uninstall keeps the user's section where the block was",
        removed.index("mine") < removed.index(USER) < removed.index("also mine")), (True, 4, False, True, True))
 check("uninstall of a pure block leaves the rest", bm.remove(f"# Mine\n\n{OLD}\n\n# Tail\n")[0], "# Mine\n\n# Tail\n")
 check("uninstall with no block changes nothing", bm.remove("# Mine\n"), ("# Mine\n", 0, False))
+fence = "# Notes\n\n```\nline 1\n\n\n\nline 2\n```\n"
+check("uninstall leaves blank-line runs elsewhere alone (PR #39 review)",
+      bm.remove(f"{fence}\n{OLD}\n\n# Tail\n")[0], f"{fence}\n# Tail\n")
+check("uninstall of a block at the top of the file", bm.remove(f"{OLD}\n\n# Tail\n")[0], "# Tail\n")
 
 # The CLI the shell scripts call.
 with tempfile.TemporaryDirectory() as d:
     md, tpl = Path(d, "CLAUDE.md"), Path(d, "tpl.md")
     md.write_text(INSIDE, encoding="utf-8")
     tpl.write_text(TPL, encoding="utf-8")
+    # A cp1252 child stdout is what the Windows CI runner gives a pipe; the ✓ must still print.
+    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONIOENCODING", "PYTHONUTF8")}
+    env["PYTHONIOENCODING"] = "cp1252"
     out = subprocess.run([sys.executable, str(REPO / "setup" / "block_merge.py"), "inject", str(md), str(tpl), "C:/lib"],
-                         capture_output=True, text=True, encoding="utf-8").stdout
+                         capture_output=True, text=True, encoding="utf-8", env=env).stdout
     check("CLI inject reports the kept lines", "kept 4 line(s)" in out, True)
     check("CLI inject writes the merged file", USER in md.read_text(encoding="utf-8"), True)
     out = subprocess.run([sys.executable, str(REPO / "setup" / "block_merge.py"), "remove", str(md)],
-                         capture_output=True, text=True, encoding="utf-8").stdout
+                         capture_output=True, text=True, encoding="utf-8", env=env).stdout
     text = md.read_text(encoding="utf-8")
     check("CLI remove: block gone, user text stays", ("FABLIZE" in text, USER in text, "removed" in out), (False, True, True))
 

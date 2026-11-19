@@ -155,7 +155,7 @@ with tempfile.TemporaryDirectory() as tmp:
     md = home / ".claude" / "CLAUDE.md"
     user = "# touch blocked\n\n- use `: >> f` instead of touch"
     seeded = ("# Mine first\n\nkeep me\n\n" +
-              claude_md2.strip().replace("FABLIZE:BEGIN", "FABLIZE:BEGIN", 1).split("\n", 1)[0] + "\n" + user + "\n" +
+              claude_md2.strip().split("\n", 1)[0] + "\n" + user + "\n" +
               claude_md2.strip().split("\n", 1)[1] + "\n\n# Mine last\n")
     md.write_text(seeded, encoding="utf-8")
     proc3 = run_setup(root2, home)
@@ -167,7 +167,7 @@ with tempfile.TemporaryDirectory() as tmp:
     check("block replaced in place (sections after it stay after it)",
           after.index("FABLIZE:END") < after.index("# Mine last") and after.index("# Mine first") < after.index(user), True)
     check("setup says it kept the text", "kept 2 line(s) of your own text" in proc3.stdout, True)
-    proc4 = run_setup(root2, home)
+    check("a second re-run exits 0", run_setup(root2, home).returncode, 0)
     check("a second re-run changes nothing more", md.read_text(encoding="utf-8"), after)
 
     # An older copy of setup.sh must refuse to overwrite a newer setup. The
