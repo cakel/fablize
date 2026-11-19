@@ -211,17 +211,9 @@ cp "$ROOT"/packs/*.txt "$LIB_DIR/packs/"
 cp "$ROOT/hooks/py.sh" "$ROOT/hooks/finish-the-work.sh" "$LIB_DIR/hooks/"
 echo "  ✓ assets: $LIB_DIR (refreshed from $ROOT)"
 
-# Substitute __PLUGIN_ROOT__ -> stable path, then inject idempotently (remove old markers, re-insert).
-pyrun - "$CLAUDE_MD" "$BLOCK_TPL" "$LIB_DIR" <<'PY'
-import sys, re, pathlib
-md, tpl, root = sys.argv[1], sys.argv[2], sys.argv[3]
-p = pathlib.Path(md)
-cur = p.read_text(encoding="utf-8") if p.exists() else ""
-block = pathlib.Path(tpl).read_text(encoding="utf-8").strip().replace("__PLUGIN_ROOT__", root)
-cur = re.sub(r"<!-- FABLIZE:BEGIN.*?FABLIZE:END -->\n?", "", cur, flags=re.S).rstrip()
-p.write_text((cur + "\n\n" + block + "\n") if cur else (block + "\n"), encoding="utf-8")
-print("  ✓ CLAUDE.md: FABLIZE operating block injected (idempotent)")
-PY
+# Substitute __PLUGIN_ROOT__ -> stable path, then replace the block in place. Text the
+# user put between the markers is kept above the block (setup/block_merge.py).
+pyrun "$ROOT/setup/block_merge.py" inject "$CLAUDE_MD" "$BLOCK_TPL" "$LIB_DIR"
 
 # Record setup state so the skill won't auto-run setup again.
 mkdir -p "$STATE_DIR"

@@ -35,14 +35,8 @@ PY
 
 [ -f "$CLAUDE_MD" ] || { echo "fablize: $CLAUDE_MD not found — nothing to remove."; exit 0; }
 
-pyrun - "$CLAUDE_MD" <<'PY'
-import sys, re, pathlib
-p = pathlib.Path(sys.argv[1])
-cur = p.read_text(encoding="utf-8")
-new = re.sub(r"\n*<!-- FABLIZE:BEGIN.*?FABLIZE:END -->\n?", "\n", cur, flags=re.S)
-p.write_text(new, encoding="utf-8")
-print("  ✓ FABLIZE block removed" if new != cur else "  = no FABLIZE block (already removed)")
-PY
+# Text the user put between the markers stays where the block was (setup/block_merge.py).
+pyrun "$ROOT/setup/block_merge.py" remove "$CLAUDE_MD"
 
 echo "fablize uninstall complete ($scope). The plugin hooks (router + observation gate) stay active until you /plugin uninstall."
 echo "  Backups ($CLAUDE_MD.fablize-bak.*) can be deleted manually if no longer needed."
