@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
 
 ## [Unreleased]
 
+### Fixed
+
+- **setup / uninstall keep the user's text inside the FABLIZE markers.** setup.sh
+  deleted everything between `FABLIZE:BEGIN` and `FABLIZE:END` and appended a fresh
+  block at the end of CLAUDE.md, so a section written inside the markers vanished on
+  every upgrade (seen 2026-11-19: a "touch.exe blocked" section right after BEGIN).
+  uninstall.sh had the same hole. Both now go through `setup/block_merge.py`: the
+  block is replaced in place, and lines no fablize template wrote (anything but the
+  markers, the "## Operating mode" heading, its intro and the `- **[…]**` bullets)
+  are kept — above the new block on setup, where the block was on uninstall — and
+  counted in the output. A duplicated block is dropped the same way.
+
 ## [2.1.1+cakel.14] — 2026-11-19
 
 ### Added

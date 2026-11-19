@@ -50,6 +50,7 @@ def fake_plugin_root(base: Path, version: str) -> Path:
     )
     shutil.copy(REPO / "setup" / "setup.sh", root / "setup" / "setup.sh")
     shutil.copy(REPO / "setup" / "fablize-block.md", root / "setup" / "fablize-block.md")
+    shutil.copy(REPO / "setup" / "block_merge.py", root / "setup" / "block_merge.py")
     # setup.sh runs python through hooks/py.sh and copies it, with
     # finish-the-work.sh, to the stable lib dir.
     for hook in ("py.sh", "finish-the-work.sh"):
@@ -147,6 +148,27 @@ with tempfile.TemporaryDirectory() as tmp:
     check("block still version-free",
           bool(re.search(r"cache[/\\]fablize[/\\]fablize[/\\]\d", claude_md2)), False)
     check("block not duplicated", claude_md2.count("FABLIZE:BEGIN"), 1)
+
+    # Text a user put INSIDE the markers survives an upgrade (seen 2026-11-19: a
+    # "touch.exe blocked" section right after FABLIZE:BEGIN was deleted), and the
+    # block stays where it was instead of moving to the end of the file.
+    md = home / ".claude" / "CLAUDE.md"
+    user = "# touch blocked\n\n- use `: >> f` instead of touch"
+    seeded = ("# Mine first\n\nkeep me\n\n" +
+              claude_md2.strip().split("\n", 1)[0] + "\n" + user + "\n" +
+              claude_md2.strip().split("\n", 1)[1] + "\n\n# Mine last\n")
+    md.write_text(seeded, encoding="utf-8")
+    proc3 = run_setup(root2, home)
+    after = md.read_text(encoding="utf-8")
+    check("re-run with user text inside the block: exit code", proc3.returncode, 0)
+    check("user text inside the markers is kept", user in after, True)
+    check("kept text is now outside (above) the block",
+          after.index(user) < after.index("FABLIZE:BEGIN") and after.count("FABLIZE:BEGIN") == 1, True)
+    check("block replaced in place (sections after it stay after it)",
+          after.index("FABLIZE:END") < after.index("# Mine last") and after.index("# Mine first") < after.index(user), True)
+    check("setup says it kept the text", "kept 2 line(s) of your own text" in proc3.stdout, True)
+    check("a second re-run exits 0", run_setup(root2, home).returncode, 0)
+    check("a second re-run changes nothing more", md.read_text(encoding="utf-8"), after)
 
     # An older copy of setup.sh must refuse to overwrite a newer setup. The
     # /fablize:setup command has its plugin path expanded when a session loads
