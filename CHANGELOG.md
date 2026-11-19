@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
 
 ## [Unreleased]
 
+## [2.1.1+cakel.14] — 2026-11-19
+
 ### Added
 
 - **`tests/e2e/kiro_linux_e2e.sh`**: fablize on Kiro CLI end to end on a Linux host —
