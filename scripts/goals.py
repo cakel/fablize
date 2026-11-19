@@ -140,6 +140,9 @@ def _shell():
     return None
 
 
+GOALS_VERIFY_OK = "fablize: verify-cmd exit 0 (observed by goals.py)"
+
+
 def run_verify(cmd):
     """Run the verify command from the current dir. Returns (exit code, output tail)."""
     sh = _shell()
@@ -184,6 +187,13 @@ def cmd_checkpoint(a):
         verify_cmd=a.verify_cmd, verify_evidence=a.verify_evidence)
     print(f"fablize: {g['id']} → {a.status}")
     print(progress_line(plan))
+    if "[observed] exit 0" in (a.verify_evidence or ""):
+        # Last line on purpose: the Stop gate reads it as this call's verification
+        # verdict, and `… | tail -3` keeps it (the "running verify command" line is
+        # long gone by then). Keep the text in sync with GOALS_VERIFY_OK_RE in
+        # scripts/gate/parse_tool_result.py (and the sys.exit text above with
+        # GOALS_VERIFY_FAIL_RE there); tests/test_gate_heuristics.py runs both for real.
+        print(GOALS_VERIFY_OK)
 
 
 def cmd_status(a):

@@ -345,6 +345,86 @@ check("echoed zero status is not a failure (glued to file text too)",
 check("'exit=1' in output without an echoed $? is not a status", _ES("pytest -q", "5 passed, exit=1 in log"), True)
 
 
+# --- goals.py checkpoint that RAN its --verify-cmd (seen 2026-11-19: the only check after an edit was ignored) ---
+GCMD = ('bash "C:/x/hooks/py.sh" "C:/x/scripts/goals.py" checkpoint --id G005 --status complete '
+        '--evidence "ok" --verify-cmd "python -m pytest -q tests" 2>&1 | tail -3')
+_GV = lambda cmd, out: verification_record({"tool_name": "Bash", "tool_input": {"command": cmd},
+                                            "tool_response": {"stdout": out, "stderr": ""}})
+check("goals.py verdict line after a real run counts as a passed verification",
+      (_GV(GCMD, "1076 passed in 5s\nfablize: all stories complete ✓\nfablize: verify-cmd exit 0 (observed by goals.py)")
+       or {}).get("success"), True)
+check("goals.py 'verify command exited 1' counts as a failed verification",
+      (_GV(GCMD, "1 failed, 3 passed\nfablize: verify command exited 1 — the final story stays in progress.") or {}).get("success"),
+      False)
+check("goals.py checkpoint without its verdict line (non-final story) is still a claim",
+      _GV(GCMD, "fablize: G003 → complete\nfablize: 2 stories left"), None)
+check("the verdict text in an unrelated command is not a goals.py run",
+      _GV('echo "fablize: verify-cmd exit 0 (observed by goals.py)"', "fablize: verify-cmd exit 0 (observed by goals.py)"), None)
+check("python goals.py (no py.sh) is recognised too",
+      (_GV('python3 scripts/goals.py checkpoint --id G2 --status complete --evidence e --verify-cmd "make test"',
+           "fablize: verify-cmd exit 0 (observed by goals.py)") or {}).get("success"), True)
+
+
+def _goals_live(code):
+    """Run the real goals.py final checkpoint with a verify command exiting `code`.
+    Returns (last stdout line, verification_record success for its real stdout+stderr)."""
+    with tempfile.TemporaryDirectory() as d:
+        g = [sys.executable, str(REPO / "scripts" / "goals.py")]
+        run = lambda *a: subprocess.run(g + list(a), cwd=d, capture_output=True, text=True, encoding="utf-8")
+        run("create", "--brief", "b", "--goal", "only::o")
+        run("next")
+        p = run("checkpoint", "--id", "G001", "--status", "complete", "--evidence", "e",
+                "--verify-cmd", f'"{sys.executable}" -c "import sys; sys.exit({code})"')
+        last = p.stdout.strip().splitlines()[-1] if p.stdout.strip() else ""
+        rec = _GV('python scripts/goals.py checkpoint --id G001 --status complete --evidence e --verify-cmd "x"',
+                  p.stdout + p.stderr) or {}
+        return last, rec.get("success")
+
+
+check("real goals.py: verdict line is last and records a pass", _goals_live(0),
+      ("fablize: verify-cmd exit 0 (observed by goals.py)", True))
+check("real goals.py: a failing verify-cmd's own exit text records a failure", _goals_live(3)[1], False)
+
+
+# --- a python SCRIPT that writes the files it is handed (seen 2026-11-19: edits recorded as no change) ---
+def _argv_cases():
+    with tempfile.TemporaryDirectory() as root:
+        proj = os.path.join(root, "proj")
+        scratch = os.path.join(root, "claude", "s1", "scratchpad")
+        for p in (os.path.join(proj, "mem"), scratch):
+            os.makedirs(p)
+        Path(scratch, "edlib.py").write_text(
+            "import sys\np = sys.argv[1]\ns = open(p).read()\nopen(p, 'w', newline='').write(s)\n", encoding="utf-8")
+        Path(scratch, "report.py").write_text("import sys\nprint(open(sys.argv[1]).read()[:10])\n", encoding="utf-8")
+        Path(proj, "tools").mkdir()
+        Path(proj, "tools", "fix.py").write_text("from pathlib import Path\nimport sys\nPath(sys.argv[1]).write_text('x')\n",
+                                                 encoding="utf-8")
+        Path(proj, "tools", "check_doc.py").write_text("import sys\nopen('out.txt','w')\n", encoding="utf-8")
+        k = lambda c, cwd=proj: changed_kinds({"tool_name": "Bash", "tool_input": {"command": c}, "cwd": cwd})
+        S = scratch.replace("\\", "/")
+        return {
+            "edlib": k(f'S="{S}"; cd "{proj}/mem"; WHICH=x python -I "$S/edlib.py" note.md "$S/spec.py"'),
+            "code": k("python tools/fix.py src/app.py"),
+            "py.sh": k(f'bash hooks/py.sh "{S}/edlib.py" src/app.py'),
+            "reader": k(f'python "{S}/report.py" src/app.py'),
+            "scratch-arg": k(f'python "{S}/edlib.py" "{S}/probe.py"'),
+            "checker": k("python tools/check_doc.py docs/a.md"),
+            "no-file-args": k("python tools/fix.py --round r21 G005"),
+            "missing-script": k("python nowhere/fix.py src/app.py"),
+        }
+
+
+AV = _argv_cases()
+check("script handed a .md after cd counts as a docs change; its scratch spec does not", AV["edlib"], ["docs"])
+check("script that writes its argument: code change", AV["code"], ["code"])
+check("bash py.sh <script> <file> is the same python run", AV["py.sh"], ["code"])
+check("script without a write call changes nothing", AV["reader"], [])
+check("only-scratch argument changes nothing", AV["scratch-arg"], [])
+check("a checker entry point is a verification, not an edit", AV["checker"], [])
+check("arguments without an extension are not files", AV["no-file-args"], [])
+check("an unreadable script is not guessed at", AV["missing-script"], [])
+
+
 def main():
     bad = 0
     for label, got, want in CHECKS:

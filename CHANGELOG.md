@@ -15,6 +15,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning is [S
 
 ### Fixed
 
+- **`goals.py checkpoint --verify-cmd` that ran its command counts as a check.** goals.py
+  runs the final story's `--verify-cmd` and needs exit 0, yet the gate treated the quoted
+  command as a claim, so a turn whose last check was exactly the step fablize prescribes
+  was blocked (seen 2026-11-19: `pytest` 1076 passed through goals.py, then "a change was
+  recorded after the last check"). goals.py now prints `fablize: verify-cmd exit 0
+  (observed by goals.py)` as its last line, and `verification_record` reads that line —
+  or goals.py's own `verify command exited N` — as the call's verdict. Without the line
+  (a non-final story ignores `--verify-cmd`) it stays a claim, as before.
+- **A python script that writes the files it is handed is a change.** `python edit.py
+  src/a.py spec.py` changed `src/a.py` with no redirect, mutating verb or inline program
+  in sight, so it recorded nothing (same session: board code and memory files edited
+  this way were invisible). `script_arg_writes` opens the script (it is local); if it has
+  a write call, its file-like arguments count (after a preceding `cd`; scratch ones and
+  extension-less ones such as `--round r21` do not). A checker entry point
+  (`check_x.py`) and an unreadable script are left alone. An argument the script only
+  reads also counts — a wrong block costs one reply, a missed edit is the failure.
 - **A one-line `python -c "…; assert …"` counts as a check.** `assert` only matched at
   the start of a line, so `python3 -c "from m import f; assert f() == 2"` — the form
   models write most — was no check, and a deep turn that did verify was blocked to the
