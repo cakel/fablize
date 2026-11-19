@@ -1028,6 +1028,86 @@ def mutated_paths(command: str, project: str | None = None) -> list[str]:
     return operands
 
 
+_SCRIPT_READ_MAX = 512_000
+_ARG_FILE_RE = re.compile(r"\.[A-Za-z][A-Za-z0-9]{0,7}$")
+_PY_VALUE_FLAGS = {"-X", "-W", "-Q"}
+
+
+def _fs_path(path: str) -> str:
+    """A path the hook can open: `~` expanded, msys `/d/Work` -> `d:/Work` on Windows."""
+    path = os.path.expanduser(path)
+    m = re.match(r"^/([A-Za-z])(/|$)", path)
+    if os.name == "nt" and m:
+        path = f"{m.group(1)}:/{path[3:]}"
+    return path
+
+
+def script_arg_writes(command: str, project: str | None = None) -> list[str]:
+    """Files handed to a python SCRIPT on its command line, when that script writes files.
+
+    `python tools/edit.py src/a.py spec.py` changes src/a.py, but neither the command
+    (no redirect, no mutating verb) nor an inline program shows it: the write call is
+    inside the script. So the script is opened (it is on this machine) and, if it has a
+    write call (`_PY_WRITE_RE`), its file-like arguments count as changed. Arguments
+    without an extension (`--round r21`, `G005`) are not files; scratch ones are
+    dropped; a test/checker entry point (`check_x.py`) is a verification, not an edit;
+    an unreadable script is not guessed at. An argument the script only READS counts
+    too — a wrong block costs one reply, a missed edit is what this gate exists for."""
+    out: list[str] = []
+    ctx = _Context(command, project)
+    cwd = project or os.getcwd()
+    for segment in _segments(command):
+        cd = _CD_RE.match(segment.strip())
+        if cd:
+            target = ctx.expand(next(g for g in cd.groups() if g))
+            if target != "-":
+                cwd = _fs_path(target) if _ABS_RE.match(target) else os.path.join(cwd, target)
+            continue
+        head = _head(segment)
+        if not head or head[0] != "python":
+            continue
+        script, args, skip = "", [], False
+        for token in head[1:]:
+            if skip:
+                skip = False
+                continue
+            if not script:
+                if token in _PY_VALUE_FLAGS:
+                    skip = True
+                    continue
+                if token in {"-m", "-c", "-"}:
+                    break  # a module, inline source or stdin: not a script file
+                if token.startswith("-"):
+                    continue
+                script = token
+                continue
+            args.append(token)
+        if not script or not args:
+            continue
+        name = script.replace("\\", "/")
+        if _TEST_ENTRY_RE.search(name) or _CHECK_ENTRY_RE.search(name):
+            continue
+        path = _fs_path(ctx.expand(script))
+        if not _ABS_RE.match(path):
+            path = os.path.join(cwd, path)
+        try:
+            with open(path, encoding="utf-8", errors="replace") as fh:
+                source = fh.read(_SCRIPT_READ_MAX)
+        except OSError:
+            continue
+        if not _PY_WRITE_RE.search(source):
+            continue
+        for arg in args:
+            value = ctx.expand(arg)
+            if arg.startswith("-") or "=" in arg or not _ARG_FILE_RE.search(value):
+                continue
+            full = _fs_path(value) if _ABS_RE.match(value) else os.path.join(cwd, value)
+            if is_scratch(full, project) or is_scratch(value, project):
+                continue
+            out.append(full.replace("\\", "/"))
+    return out
+
+
 _PS_CMDLETS = {"copy-item", "move-item", "remove-item", "new-item", "set-content", "add-content", "out-file"}
 # Parameters that take a value. Anything else (-Force, -Recurse, -NoNewline) is a
 # switch, and treating it as value-taking swallowed the path that followed.
@@ -1289,6 +1369,7 @@ def _changes(input_data: dict[str, Any]) -> tuple[list[tuple[str, str]], bool]:
     command = _SSH_PAYLOAD_RE.sub("ssh", command_from_input(input_data))
     ctx = _Context(command, project)
     written = shell_written_paths(command, project, posix=tool_name != "PowerShell")
+    written += script_arg_writes(command, project)
     if MUTATING_TOOL_RE.search(command) or (command_words(command) & MUTATING_CMDS):
         # Classify what the command names before falling back to "other". Reporting
         # "other" for `cp notes.md docs/notes.md` is a claim about a file the gate
@@ -1309,8 +1390,45 @@ def _changes(input_data: dict[str, Any]) -> tuple[list[tuple[str, str]], bool]:
 _STASH_RE = re.compile(r"\bgit\s+stash(?!\s+(?:list|show|pop|apply|drop|clear)\b)")
 
 
+# goals.py prints these itself (scripts/goals.py GOALS_VERIFY_OK and its sys.exit text).
+GOALS_VERIFY_OK_RE = re.compile(r"fablize: verify-cmd exit 0 \(observed by goals\.py\)")
+GOALS_VERIFY_FAIL_RE = re.compile(r"fablize: verify command exited (?:-?\d+|None)")
+
+
+def _runs_goals_checkpoint_verify(command: str) -> bool:
+    """A segment that runs goals.py checkpoint with --verify-cmd (`bash py.sh goals.py …` or `python goals.py …`)."""
+    for head in _segment_heads(command):
+        if head[0] != "python":
+            continue
+        script = next((t for t in head[1:] if not t.startswith("-")), "")
+        if script.replace("\\", "/").rsplit("/", 1)[-1] == "goals.py" and "checkpoint" in head and \
+                any(t == "--verify-cmd" or t.startswith("--verify-cmd=") for t in head):
+            return True
+    return False
+
+
+def goals_verify_outcome(command: str, text: str) -> bool | None:
+    """goals.py checkpoint RUNS the final story's --verify-cmd and needs exit 0, so its
+    own verdict line is the observation: True / False, or None when this call did not
+    run one (a non-final story ignores --verify-cmd — then it stays a claim)."""
+    if not _runs_goals_checkpoint_verify(command):
+        return None
+    if GOALS_VERIFY_FAIL_RE.search(text):
+        return False
+    if GOALS_VERIFY_OK_RE.search(text):
+        return True
+    return None
+
+
 def verification_record(input_data: dict[str, Any]) -> dict[str, Any] | None:
     command = command_from_input(input_data)
+    if command and not interrupted(input_data) and not backgrounded(input_data):
+        # The quoted --verify-cmd is data to is_verification_command (a claim), but
+        # goals.py runs it: when its verdict line is in the output, that is a run.
+        text = response_text(input_data.get("tool_response", input_data), 4000)
+        outcome = goals_verify_outcome(command, text)
+        if outcome is not None:
+            return {"command": redact(command, 220), "success": outcome, "summary": redact(text[-220:], 220)}
     if not command or not is_verification_command(command) or interrupted(input_data):
         return None
     if backgrounded(input_data):
